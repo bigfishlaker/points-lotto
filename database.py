@@ -326,17 +326,19 @@ class DatabaseManager:
             if drawing_date is None:
                 drawing_date = date.today().isoformat()
             
-            # Set all previous winners to not current
-            cursor.execute('UPDATE daily_winners SET is_current = 0')
-            
-            # Check if winner already exists for this date
+            # FIRST: Check if winner already exists for this date BEFORE doing anything
             cursor.execute('SELECT id FROM daily_winners WHERE drawing_date = ?', (drawing_date,))
             existing = cursor.fetchone()
             
             if existing:
-                # Winner already selected for today - don't overwrite
+                # Winner already selected for today - ensure it's marked as current and don't overwrite
+                cursor.execute('UPDATE daily_winners SET is_current = 1 WHERE drawing_date = ?', (drawing_date,))
+                conn.commit()
                 conn.close()
                 return False
+            
+            # Only set previous winners to not current if we're inserting a new one
+            cursor.execute('UPDATE daily_winners SET is_current = 0 WHERE drawing_date != ?', (drawing_date,))
             
             # Create selection hash for verification
             if selection_hash is None:
