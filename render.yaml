@@ -11,5 +11,5 @@ services:
         sync: false
       - key: DEBUG
         value: False
-    pythonVersion: "3.12.7"
+    pythonVersion: "3.13.4"
 
