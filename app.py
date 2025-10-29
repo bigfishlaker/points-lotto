@@ -108,8 +108,10 @@ def require_api_key(f):
 
 @app.route('/')
 def dashboard():
-    """Redirect to qualified page (main user-facing page)"""
-    return redirect(url_for('qualified_users'))
+    """Main page - shows qualification checker"""
+    # Just call the qualified_users function directly
+    from app import qualified_users
+    return qualified_users()
 
 @app.route('/keywords')
 def keywords():
@@ -305,6 +307,7 @@ def api_winners():
     return jsonify(winners)
 
 @app.route('/qualified')
+@app.route('/dashboard')
 def qualified_users():
     """Unified page: switch between min1 and 24h gain views via ?view=..."""
     if not POINTSMARKET_ENABLED:
