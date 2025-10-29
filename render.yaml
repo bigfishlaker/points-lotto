@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: pointslotto
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn -w 4 -b 0.0.0.0:$PORT app:app
+    envVars:
+      - key: SECRET_KEY
+        sync: false
+      - key: ADMIN_API_KEY
+        sync: false
+      - key: DEBUG
+        value: False
+    pythonVersion: "3.12.7"
+
