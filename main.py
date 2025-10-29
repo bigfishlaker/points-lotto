@@ -11,7 +11,13 @@ This script starts the complete lottery system including:
 import threading
 import time
 from config import Config
-from twitter_monitor import TwitterMonitor
+# Twitter monitor is optional - import only if available
+try:
+    from twitter_monitor import TwitterMonitor
+    TWITTER_MONITOR_AVAILABLE = True
+except ImportError:
+    TwitterMonitor = None
+    TWITTER_MONITOR_AVAILABLE = False
 from lottery_engine import LotteryEngine
 from app import app
 
@@ -26,17 +32,20 @@ def main():
     print("-" * 50)
     
     # Initialize components
-    twitter_monitor = TwitterMonitor()
     lottery_engine = LotteryEngine()
     
-    # Start Twitter monitoring in background thread
-    print("🔍 Starting Twitter monitoring...")
-    monitor_thread = threading.Thread(
-        target=twitter_monitor.monitor_account,
-        args=(config.MAIN_TWITTER_ACCOUNT,),
-        daemon=True
-    )
-    monitor_thread.start()
+    # Start Twitter monitoring only if available
+    if TWITTER_MONITOR_AVAILABLE and TwitterMonitor:
+        print("🔍 Starting Twitter monitoring...")
+        twitter_monitor = TwitterMonitor()
+        monitor_thread = threading.Thread(
+            target=twitter_monitor.monitor_account,
+            args=(config.MAIN_TWITTER_ACCOUNT,),
+            daemon=True
+        )
+        monitor_thread.start()
+    else:
+        print("⚠️  Twitter monitoring not available (tweepy not installed or Python 3.13+ compatibility issue)")
     
     # Start lottery scheduler in background thread
     print("🎲 Starting lottery scheduler...")
