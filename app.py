@@ -725,11 +725,15 @@ def select_daily_winner_with_fresh_data():
         traceback.print_exc()
         return None
 
+# Thread lock for winner selection to prevent concurrent selections
+_winner_selection_lock = threading.Lock()
+
 def daily_winner_scheduler():
-    """Background thread that selects winner automatically at midnight"""
+    """Background thread that selects winner automatically at midnight - GUARANTEED one winner per day"""
     print("🕐 Daily winner scheduler started")
     print("   Will select winner at midnight (00:00) each day")
     print("   Checks every minute - waits for timer, then fetches fresh data")
+    print("   🔒 Thread-safe lock ensures only ONE winner per day")
     
     last_processed_date = None
     
@@ -742,23 +746,32 @@ def daily_winner_scheduler():
             if now.hour == 0 and 1 <= now.minute <= 5:
                 # New day detected, check if we've already processed it
                 if last_processed_date != current_date:
-                    # Check if winner already exists for today
-                    today_str = current_date.isoformat()
-                    existing = db.get_winner_for_date(today_str)
-                    
-                    if not existing:
-                        print(f"\n⏰ MIDNIGHT DETECTED! {now.strftime('%Y-%m-%d %H:%M:%S')}")
-                        print("=" * 60)
-                        print("🚀 Timer has reached zero - selecting winner NOW")
-                        print("📊 Step 1: Fetching FRESH data from PointsMarket...")
-                        print("=" * 60)
-                        result = select_daily_winner_with_fresh_data()
-                        if result:
+                    # USE LOCK to prevent concurrent selections
+                    with _winner_selection_lock:
+                        # Double-check inside lock (another process might have selected while we waited)
+                        today_str = current_date.isoformat()
+                        existing = db.get_winner_for_date(today_str)
+                        
+                        if not existing:
+                            print(f"\n⏰ MIDNIGHT DETECTED! {now.strftime('%Y-%m-%d %H:%M:%S')}")
                             print("=" * 60)
-                            print("✅ Winner selection complete!")
+                            print("🚀 Timer has reached zero - selecting winner NOW")
+                            print("🔒 Lock acquired - ensuring single winner selection")
+                            print("📊 Step 1: Fetching FRESH data from PointsMarket...")
                             print("=" * 60)
-                    else:
-                        print(f"✅ Winner already exists for {today_str}: @{existing['username']}")
+                            result = select_daily_winner_with_fresh_data()
+                            if result:
+                                print("=" * 60)
+                                print(f"✅ Winner selection complete: @{result['username']}")
+                                print("🔓 Lock released")
+                                print("=" * 60)
+                            else:
+                                print("=" * 60)
+                                print("❌ Winner selection failed or was prevented")
+                                print("🔓 Lock released")
+                                print("=" * 60)
+                        else:
+                            print(f"✅ Winner already exists for {today_str}: @{existing['username']} (no selection needed)")
                     
                     last_processed_date = current_date
             else:
@@ -782,7 +795,41 @@ def api_select_winner():
     if not POINTSMARKET_ENABLED:
         return jsonify({'error': 'PointsMarket integration not available'}), 404
     
-    result = select_daily_winner_with_fresh_data()
+    # FIRST: Check if winner already exists for today - prevent duplicate selections
+    from datetime import date
+    drawing_date = date.today().isoformat()
+    existing = db.get_winner_for_date(drawing_date)
+    
+    if existing:
+        # Winner already selected for today - return existing winner
+        return jsonify({
+            'success': True,
+            'message': 'Winner already selected for today',
+            'winner': {
+                'username': existing['username'],
+                'points': existing['points'],
+                'drawing_date': existing['drawing_date']
+            },
+            'note': 'No new winner selected - current winner remains active'
+        })
+    
+    # Use lock to prevent concurrent selections via API
+    with _winner_selection_lock:
+        # Double-check inside lock
+        existing_check = db.get_winner_for_date(drawing_date)
+        if existing_check:
+            return jsonify({
+                'success': True,
+                'message': 'Winner already selected for today (race condition prevented)',
+                'winner': {
+                    'username': existing_check['username'],
+                    'points': existing_check['points'],
+                    'drawing_date': existing_check['drawing_date']
+                }
+            })
+        
+        # Only proceed if no winner exists
+        result = select_daily_winner_with_fresh_data()
     
     if result:
         return jsonify({

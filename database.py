@@ -315,19 +315,26 @@ class DatabaseManager:
         } for result in results]
     
     def record_daily_winner(self, username: str, points: int, drawing_date: str = None, total_eligible: int = None, random_seed: int = None, selection_hash: str = None) -> bool:
-        """Record a daily 24h lottery winner with audit trail"""
+        """Record a daily 24h lottery winner with audit trail - GUARANTEED only one winner per day"""
         from datetime import datetime, date
         import hashlib
         
         conn = sqlite3.connect(self.db_path)
+        # Enable WAL mode for better concurrency
+        conn.execute('PRAGMA journal_mode=WAL')
+        # Set timeout for locks
+        conn.execute('PRAGMA busy_timeout=5000')
         cursor = conn.cursor()
         
         try:
             if drawing_date is None:
                 drawing_date = date.today().isoformat()
             
-            # FIRST: Check if winner already exists for this date BEFORE doing anything
-            cursor.execute('SELECT id FROM daily_winners WHERE drawing_date = ?', (drawing_date,))
+            # Use an exclusive transaction to prevent race conditions
+            conn.execute('BEGIN EXCLUSIVE')
+            
+            # FIRST: Check if winner already exists for this date (within transaction)
+            cursor.execute('SELECT id, winner_username FROM daily_winners WHERE drawing_date = ?', (drawing_date,))
             existing = cursor.fetchone()
             
             if existing:
@@ -335,6 +342,7 @@ class DatabaseManager:
                 cursor.execute('UPDATE daily_winners SET is_current = 1 WHERE drawing_date = ?', (drawing_date,))
                 conn.commit()
                 conn.close()
+                print(f"🛡️ Winner already exists for {drawing_date}: @{existing[1]} - preventing duplicate")
                 return False
             
             # Only set previous winners to not current if we're inserting a new one
@@ -345,7 +353,7 @@ class DatabaseManager:
                 hash_input = f"{drawing_date}{username}{points}{random_seed or 0}"
                 selection_hash = hashlib.sha256(hash_input.encode()).hexdigest()[:16]
             
-            # Insert new winner (only if none exists for today)
+            # Insert new winner - UNIQUE constraint on drawing_date will prevent duplicates
             cursor.execute('''
                 INSERT INTO daily_winners (winner_username, winner_points, drawing_date, is_current, total_eligible, random_seed, selection_hash)
                 VALUES (?, ?, ?, 1, ?, ?, ?)
@@ -353,12 +361,24 @@ class DatabaseManager:
             
             conn.commit()
             conn.close()
+            print(f"✅ Winner recorded successfully: @{username} for {drawing_date}")
             return True
+        except sqlite3.IntegrityError as e:
+            # UNIQUE constraint violation - winner already exists (race condition caught)
+            conn.rollback()
+            conn.close()
+            print(f"🛡️ IntegrityError: Winner already exists for {drawing_date} - race condition prevented")
+            return False
         except sqlite3.Error as e:
-            print(f"Error recording daily winner: {e}")
+            conn.rollback()
+            conn.close()
+            print(f"❌ Error recording daily winner: {e}")
             return False
         finally:
-            conn.close()
+            try:
+                conn.close()
+            except:
+                pass
     
     def get_current_daily_winner(self) -> Optional[Dict]:
         """Get the current daily winner with audit info"""
