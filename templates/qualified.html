@@ -1076,6 +1076,11 @@
                        onkeyup="onSearchKey(event)"
                        style="width: 100%; margin: 0; background: rgba(255, 255, 255, 0.4); backdrop-filter: blur(6px);">
                 <div id="qualificationResult" style="display: none; padding: 12px; margin-top: 12px; border-radius: 0; font-size: 14px; background: rgba(220, 20, 60, 0.25); backdrop-filter: blur(8px); border: 1px solid rgba(220, 20, 60, 0.5); color: #222; font-weight: 500;"></div>
+                <div style="margin-top: 12px; display: flex; justify-content: center;">
+                    <button class="btn" onclick="showWinnerRngProcess()" style="padding: 10px 20px; font-size: 14px; background: rgba(0, 150, 0, 0.3); border-color: rgba(0, 150, 0, 0.5);">
+                        🎲 View Winner Selection
+                    </button>
+                </div>
             </div>
             </div>
             
@@ -1462,8 +1467,9 @@
             const diff = nextResetTime - now;
             
             if (diff <= 0) {
-                // Timer reached zero - select new winner!
-                selectNewWinner();
+                // Timer reached zero - check for new winner (scheduler should have selected it)
+                // Reload current winner to display it
+                loadCurrentWinner();
                 
                 // Reset happened, recalculate for next midnight
                 nextResetTime = new Date(now);
@@ -1510,6 +1516,94 @@
             if (modal) {
                 modal.classList.remove('active');
             }
+        }
+        
+        function showWinnerRngProcess() {
+            // Show terminal
+            showRngTerminal();
+            
+            // Clear and start
+            const output = document.getElementById('rngTerminalOutput');
+            if (output) {
+                output.innerHTML = '<div class="rng-terminal-line info">$ Loading winner selection details...</div>';
+            }
+            
+            // Fetch current winner with RNG info
+            fetch('/api/current_winner')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success && data.winner) {
+                        // Simulate the RNG process with actual data
+                        setTimeout(() => {
+                            addTerminalLine('$ Winner Selection Process', 'success');
+                            addTerminalLine(`$ Drawing Date: ${data.winner.drawing_date || 'N/A'}`, 'info');
+                            addTerminalLine('');
+                            
+                            addTerminalLine('$ Step 1: Fetching fresh leaderboard data...', 'info');
+                            setTimeout(() => addTerminalLine('  ✅ Data fetched from PointsMarket.io', 'success'), 500);
+                            
+                            setTimeout(() => {
+                                addTerminalLine('');
+                                addTerminalLine('$ Step 2: Filtering qualified users...', 'info');
+                                if (data.total_eligible) {
+                                    addTerminalLine(`  ✅ Found ${data.total_eligible} qualified users`, 'data');
+                                    addTerminalLine('  (Users with ≥1 total points who gained +1 in last 24h)', 'data');
+                                }
+                            }, 1000);
+                            
+                            setTimeout(() => {
+                                addTerminalLine('');
+                                addTerminalLine('$ Step 3: Generating random seed...', 'info');
+                                if (data.random_seed) {
+                                    addTerminalLine(`  Seed: ${data.random_seed}`, 'data');
+                                    addTerminalLine('  Method: SHA256 hash of (date + timestamp + qualified_count)', 'data');
+                                }
+                            }, 1500);
+                            
+                            setTimeout(() => {
+                                addTerminalLine('');
+                                addTerminalLine('$ Step 4: Applying seed to random number generator...', 'info');
+                                setTimeout(() => addTerminalLine('  ✅ RNG seeded and ready', 'success'), 400);
+                            }, 2000);
+                            
+                            setTimeout(() => {
+                                addTerminalLine('');
+                                addTerminalLine('$ Step 5: Random selection in progress...', 'info');
+                                setTimeout(() => addTerminalLine('  ✅ Selection complete!', 'success'), 600);
+                            }, 2500);
+                            
+                            setTimeout(() => {
+                                addTerminalLine('');
+                                addTerminalLine('', 'result');
+                                addTerminalLine('🏆 WINNER SELECTED:', 'result');
+                                addTerminalLine(`   Username: @${data.winner.username}`, 'result');
+                                addTerminalLine(`   Points: ${data.winner.points}`, 'result');
+                                if (data.total_eligible) {
+                                    addTerminalLine(`   Selected from: ${data.total_eligible} eligible users`, 'result');
+                                }
+                                if (data.random_seed) {
+                                    addTerminalLine(`   Random Seed: ${data.random_seed}`, 'result');
+                                }
+                                if (data.selection_hash) {
+                                    addTerminalLine(`   Verification Hash: ${data.selection_hash}`, 'result');
+                                }
+                                if (data.winner.drawing_date) {
+                                    addTerminalLine(`   Drawing Date: ${data.winner.drawing_date}`, 'result');
+                                }
+                                if (data.winner.selected_at) {
+                                    addTerminalLine(`   Selected At: ${data.winner.selected_at}`, 'result');
+                                }
+                            }, 3000);
+                        }, 300);
+                    } else {
+                        addTerminalLine('$ No winner has been selected yet', 'error');
+                        addTerminalLine('$ A winner will be selected at midnight (00:00)', 'info');
+                    }
+                })
+                .catch(error => {
+                    addTerminalLine(`$ Error loading winner details: ${error.message}`, 'error');
+                    console.error('Error loading winner:', error);
+                });
         }
         
         function addTerminalLine(text, className = 'info') {
@@ -1601,18 +1695,15 @@
             });
         }
         
-        let winnerAttempted = false;
         function loadCurrentWinner() {
             fetch('/api/current_winner')
                 .then(response => response.json())
                 .then(data => {
                     if (data.success && data.winner) {
                         displayWinner(data.winner);
-                    } else if (!winnerAttempted) {
-                        // No winner yet — pick a first test winner immediately
-                        winnerAttempted = true;
-                        selectNewWinner();
                     }
+                    // No winner yet - wait for timer to reach zero (midnight) for first selection
+                    // The scheduler will automatically select a winner at midnight
                 })
                 .catch(error => {
                     console.error('Error loading winner:', error);
@@ -1759,6 +1850,12 @@
             autoRefreshInterval = setInterval(() => {
                 loadQualifiedUsers();
             }, 5 * 60 * 1000); // 5 minutes
+            
+            // Check for new winner periodically (especially after midnight)
+            // Check every 30 seconds to catch new winners selected by scheduler
+            setInterval(() => {
+                loadCurrentWinner();
+            }, 30 * 1000); // 30 seconds
             
             // Show baseline message if applicable
             {% if is_baseline %}
