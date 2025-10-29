@@ -97,9 +97,6 @@ def ensure_scheduler_started():
         _scheduler_started = True
         print("✅ Daily winner scheduler running (will select winner at midnight)")
 
-# Start scheduler immediately when module is imported (works with gunicorn)
-ensure_scheduler_started()
-
 # Admin API Key authentication
 ADMIN_API_KEY = os.getenv('ADMIN_API_KEY', None)
 
@@ -810,6 +807,10 @@ def daily_winner_scheduler():
             import traceback
             traceback.print_exc()
             time.sleep(60)  # Wait before retrying
+
+# Start scheduler immediately when module is imported (works with gunicorn)
+# Must be called after daily_winner_scheduler function is defined
+ensure_scheduler_started()
 
 @app.route('/api/select_winner', methods=['POST'])
 @limiter.limit("5 per hour") if limiter else lambda f: f
