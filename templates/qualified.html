@@ -1469,7 +1469,7 @@
             if (diff <= 0) {
                 // Timer reached zero - scheduler should select winner soon
                 // Poll more aggressively to catch new winner (scheduler runs at 00:01-00:05)
-                loadCurrentWinner();
+                loadCurrentWinner(false); // First check, don't show terminal yet
                 
                 // Reset happened, recalculate for next midnight
                 nextResetTime = new Date(now);
@@ -1481,7 +1481,8 @@
                 const maxPolls = 24; // 24 polls * 5 seconds = 2 minutes
                 const aggressivePoll = setInterval(() => {
                     pollCount++;
-                    loadCurrentWinner();
+                    // Only show terminal on new winner detection after first poll
+                    loadCurrentWinner(pollCount > 1);
                     if (pollCount >= maxPolls) {
                         clearInterval(aggressivePoll);
                     }
@@ -1690,7 +1691,7 @@
                         }, 1600);
                         
                         setTimeout(() => {
-                            displayWinner(data.winner);
+                            displayWinner(data.winner, false); // Don't show terminal again, already showing
                             // Auto-close after 5 seconds
                             setTimeout(() => {
                                 closeRngTerminal();
@@ -1707,12 +1708,26 @@
             });
         }
         
-        function loadCurrentWinner() {
+        let lastDisplayedWinner = null; // Track last winner to detect new ones
+        
+        function loadCurrentWinner(showTerminalIfNew = false) {
             fetch('/api/current_winner')
                 .then(response => response.json())
                 .then(data => {
                     if (data.success && data.winner) {
-                        displayWinner(data.winner);
+                        const currentWinner = data.winner.username + '_' + (data.winner.drawing_date || 'unknown');
+                        
+                        // Detect if this is a new winner (different from last displayed)
+                        const isNewWinner = lastDisplayedWinner !== null && lastDisplayedWinner !== currentWinner;
+                        
+                        if (isNewWinner && showTerminalIfNew) {
+                            // New winner detected - show terminal automatically
+                            displayWinner(data.winner, true);
+                        } else {
+                            displayWinner(data.winner, false);
+                        }
+                        
+                        lastDisplayedWinner = currentWinner;
                     }
                     // No winner yet - wait for timer to reach zero (midnight) for first selection
                     // The scheduler will automatically select a winner at midnight
@@ -1722,7 +1737,7 @@
                 });
         }
         
-        function displayWinner(winner) {
+        function displayWinner(winner, showTerminalAutomatically = false) {
             // Update header display (primary location)
             const headerCard = document.getElementById('winnerCardHeader');
             const cu = document.getElementById('chipUser');
@@ -1731,6 +1746,13 @@
                 cu.textContent = '@' + winner.username;
                 cp.textContent = winner.points || 0;
                 headerCard.style.display = 'inline-flex';
+            }
+            
+            // Optionally show terminal automatically when new winner is detected
+            if (showTerminalAutomatically) {
+                setTimeout(() => {
+                    showWinnerRngProcess();
+                }, 1000); // Show terminal 1 second after winner is displayed
             }
         }
         
