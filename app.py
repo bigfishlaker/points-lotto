@@ -109,7 +109,7 @@ def require_api_key(f):
 @app.route('/')
 def dashboard():
     """Redirect to qualified page (main user-facing page)"""
-    return redirect(url_for('qualified'))
+    return redirect(url_for('qualified_users'))
 
 @app.route('/keywords')
 def keywords():
