@@ -178,7 +178,7 @@ def dashboard():
         current_winner = db.get_current_daily_winner()
         
         return render_template('qualified.html',
-                             qualified_users=qualified[:100],  # Limit for initial display
+                             qualified_users=qualified,  # Pass all users - JS handles display limits
                              total=len(qualified),
                              view=view,
                              is_baseline=is_baseline,
