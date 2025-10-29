@@ -8,8 +8,15 @@ import os
 from functools import wraps
 from database import DatabaseManager
 from lottery_engine import LotteryEngine
-from twitter_monitor import TwitterMonitor
 from config import Config
+
+# Twitter monitor is optional - import only if available
+try:
+    from twitter_monitor import TwitterMonitor
+    TWITTER_MONITOR_AVAILABLE = True
+except ImportError:
+    TwitterMonitor = None
+    TWITTER_MONITOR_AVAILABLE = False
 
 # Try to import flask-limiter for rate limiting
 try:
@@ -54,10 +61,10 @@ else:
 db = DatabaseManager()
 lottery_engine = LotteryEngine()
 
-# Initialize Twitter monitor only if credentials are available
+# Initialize Twitter monitor only if credentials are available and module is available
 twitter_monitor = None
 try:
-    if Config().TWITTER_API_KEY and Config().TWITTER_API_SECRET:
+    if TWITTER_MONITOR_AVAILABLE and TwitterMonitor and Config().TWITTER_API_KEY and Config().TWITTER_API_SECRET:
         twitter_monitor = TwitterMonitor()
 except Exception as e:
     print(f"Twitter monitor not available: {e}")
