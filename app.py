@@ -108,15 +108,8 @@ def require_api_key(f):
 
 @app.route('/')
 def dashboard():
-    """Main dashboard"""
-    stats = lottery_engine.get_lottery_stats()
-    active_keywords = db.get_active_keywords()
-    recent_winners = db.get_lottery_history(limit=10)
-    
-    return render_template('dashboard.html', 
-                         stats=stats,
-                         active_keywords=active_keywords,
-                         recent_winners=recent_winners)
+    """Redirect to qualified page (main user-facing page)"""
+    return redirect(url_for('qualified'))
 
 @app.route('/keywords')
 def keywords():
