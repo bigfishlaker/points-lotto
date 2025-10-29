@@ -713,7 +713,9 @@ def select_daily_winner_with_fresh_data():
                 'drawing_date': drawing_date,
                 'total_eligible': len(qualified),
                 'random_seed': random_seed,
-                'selection_hash': selection_hash
+                'selection_hash': selection_hash,
+                'seed_string': seed_string,
+                'winner_index': winner_index + 1
             }
         else:
             print("❌ Failed to record winner")
@@ -842,6 +844,8 @@ def api_select_winner():
             'total_eligible': result.get('total_eligible', 0),
             'random_seed': result.get('random_seed'),
             'selection_hash': result.get('selection_hash'),
+            'seed_string': result.get('seed_string'),
+            'winner_index': result.get('winner_index'),
             'selection_criteria': 'Users with ≥1 total points who gained +1 point in last 24 hours'
         })
     else:
