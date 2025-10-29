@@ -78,6 +78,27 @@ if POINTSMARKET_ENABLED:
 monitor_thread = None
 lottery_thread = None
 daily_winner_scheduler_thread = None
+_scheduler_started = False
+
+def ensure_scheduler_started():
+    """Ensure daily winner scheduler is started (only once, even with multiple workers)"""
+    global daily_winner_scheduler_thread, _scheduler_started
+    
+    if _scheduler_started or daily_winner_scheduler_thread is not None:
+        return
+    
+    if POINTSMARKET_ENABLED:
+        print("🎯 Starting daily winner scheduler...")
+        daily_winner_scheduler_thread = threading.Thread(
+            target=daily_winner_scheduler,
+            daemon=True
+        )
+        daily_winner_scheduler_thread.start()
+        _scheduler_started = True
+        print("✅ Daily winner scheduler running (will select winner at midnight)")
+
+# Start scheduler immediately when module is imported (works with gunicorn)
+ensure_scheduler_started()
 
 # Admin API Key authentication
 ADMIN_API_KEY = os.getenv('ADMIN_API_KEY', None)
@@ -1092,15 +1113,9 @@ if __name__ == '__main__':
     os.makedirs('static/css', exist_ok=True)
     os.makedirs('static/js', exist_ok=True)
     
-    # Start daily winner scheduler in background thread
-    if POINTSMARKET_ENABLED:
-        print("🎯 Starting daily winner scheduler...")
-        daily_winner_scheduler_thread = threading.Thread(
-            target=daily_winner_scheduler,
-            daemon=True
-        )
-        daily_winner_scheduler_thread.start()
-        print("✅ Daily winner scheduler running (will select winner at midnight)")
+    # Scheduler already started when module was imported (works with gunicorn)
+    # This block only runs if script is executed directly (not via gunicorn)
+    ensure_scheduler_started()
     
     # Production: debug should be False
     # Set DEBUG=True in .env only for local development

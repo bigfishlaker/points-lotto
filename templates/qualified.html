@@ -1467,14 +1467,26 @@
             const diff = nextResetTime - now;
             
             if (diff <= 0) {
-                // Timer reached zero - check for new winner (scheduler should have selected it)
-                // Reload current winner to display it
+                // Timer reached zero - scheduler should select winner soon
+                // Poll more aggressively to catch new winner (scheduler runs at 00:01-00:05)
                 loadCurrentWinner();
                 
                 // Reset happened, recalculate for next midnight
                 nextResetTime = new Date(now);
                 nextResetTime.setDate(nextResetTime.getDate() + 1);
                 nextResetTime.setHours(0, 0, 0, 0);
+                
+                // Poll every 5 seconds for next 2 minutes to catch winner selection
+                let pollCount = 0;
+                const maxPolls = 24; // 24 polls * 5 seconds = 2 minutes
+                const aggressivePoll = setInterval(() => {
+                    pollCount++;
+                    loadCurrentWinner();
+                    if (pollCount >= maxPolls) {
+                        clearInterval(aggressivePoll);
+                    }
+                }, 5000); // Every 5 seconds
+                
                 updateCountdown();
                 return;
             }
