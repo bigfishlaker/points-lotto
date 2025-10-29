@@ -1,0 +1,45 @@
+# Environment variables - NEVER COMMIT
+.env
+*.env
+env.txt
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+.venv
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+lottery.db
+
+# Daily snapshots (may contain user data)
+daily_snapshots/
+*.json
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Temporary files
+*.tmp
+leaderboard.txt
+leaderboard.json
+
