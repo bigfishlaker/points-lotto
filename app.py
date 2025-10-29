@@ -156,7 +156,8 @@ def dashboard():
                 points_yesterday = yesterday_snapshot.get(username, {}).get('points', 0) or yesterday_snapshot.get(username, {}).get('total_points', 0)
                 gain = points_now - points_yesterday
                 
-                if gain >= 1:
+                # Only include users who gained 1+ points AND have >= 1 total points (exclude negative)
+                if gain >= 1 and points_now >= 1:
                     user_data['gain'] = gain
                     user_data['total_points'] = points_now
                     qualified.append(user_data)
@@ -418,27 +419,33 @@ def qualified_users():
             if gains_data.get('baseline_created'):
                 is_baseline = True
                 for username, user_data in today_snapshot.get('users', {}).items():
-                    qualified.append({
-                        'username': username,
-                        'total_points': user_data.get('total_points', 0),
-                        'rank': user_data.get('rank', 0),
-                        'gain': 0,
-                        'yesterday_points': 0,
-                        'today_points': user_data.get('total_points', 0)
-                    })
+                    total_pts = user_data.get('total_points', 0)
+                    # Only include users with >= 1 total points (exclude negative)
+                    if total_pts >= 1:
+                        qualified.append({
+                            'username': username,
+                            'total_points': total_pts,
+                            'rank': user_data.get('rank', 0),
+                            'gain': 0,
+                            'yesterday_points': 0,
+                            'today_points': total_pts
+                        })
             elif gains_data.get('gains'):
-                # Show only users who gained points
+                # Show only users who gained points AND have >= 1 total points
                 for gain_info in gains_data['gains']:
                     username = gain_info['username']
                     user_data = today_snapshot.get('users', {}).get(username, {})
-                    qualified.append({
-                        'username': username,
-                        'total_points': user_data.get('total_points', gain_info['today_points']),
-                        'rank': user_data.get('rank', 0),
-                        'gain': gain_info['gain'],
-                        'yesterday_points': gain_info['yesterday_points'],
-                        'today_points': gain_info['today_points']
-                    })
+                    total_pts = user_data.get('total_points', gain_info['today_points'])
+                    # Only include users with >= 1 total points (exclude negative)
+                    if total_pts >= 1:
+                        qualified.append({
+                            'username': username,
+                            'total_points': total_pts,
+                            'rank': user_data.get('rank', 0),
+                            'gain': gain_info['gain'],
+                            'yesterday_points': gain_info['yesterday_points'],
+                            'today_points': gain_info['today_points']
+                        })
         
         # Sort by points descending
         qualified.sort(key=lambda x: x['total_points'], reverse=True)
@@ -495,30 +502,36 @@ def api_qualified():
             gains_data = tracker.get_daily_gains(min_gain=1)
             if gains_data.get('baseline_created'):
                 for username, user_data in today_snapshot.get('users', {}).items():
-                    qualified.append({
-                        'username': username,
-                        'total_points': user_data.get('total_points', 0),
-                        'rank': user_data.get('rank', 0),
-                        'gain': 0,
-                        'yesterday_points': 0,
-                        'today_points': user_data.get('total_points', 0),
-                        'upvotes': user_data.get('upvotes', 0),
-                        'downvotes': user_data.get('downvotes', 0)
-                    })
+                    total_pts = user_data.get('total_points', 0)
+                    # Only include users with >= 1 total points (exclude negative)
+                    if total_pts >= 1:
+                        qualified.append({
+                            'username': username,
+                            'total_points': total_pts,
+                            'rank': user_data.get('rank', 0),
+                            'gain': 0,
+                            'yesterday_points': 0,
+                            'today_points': total_pts,
+                            'upvotes': user_data.get('upvotes', 0),
+                            'downvotes': user_data.get('downvotes', 0)
+                        })
             elif gains_data.get('gains'):
                 for gain_info in gains_data['gains']:
                     username = gain_info['username']
                     user_data = today_snapshot.get('users', {}).get(username, {})
-                    qualified.append({
-                        'username': username,
-                        'total_points': user_data.get('total_points', gain_info['today_points']),
-                        'rank': user_data.get('rank', 0),
-                        'gain': gain_info['gain'],
-                        'yesterday_points': gain_info['yesterday_points'],
-                        'today_points': gain_info['today_points'],
-                        'upvotes': user_data.get('upvotes', 0),
-                        'downvotes': user_data.get('downvotes', 0)
-                    })
+                    total_pts = user_data.get('total_points', gain_info['today_points'])
+                    # Only include users who gained points AND have >= 1 total points (exclude negative)
+                    if total_pts >= 1:
+                        qualified.append({
+                            'username': username,
+                            'total_points': total_pts,
+                            'rank': user_data.get('rank', 0),
+                            'gain': gain_info['gain'],
+                            'yesterday_points': gain_info['yesterday_points'],
+                            'today_points': gain_info['today_points'],
+                            'upvotes': user_data.get('upvotes', 0),
+                            'downvotes': user_data.get('downvotes', 0)
+                        })
 
         # Sort and limit
         qualified.sort(key=lambda x: x.get('total_points', 0), reverse=True)
