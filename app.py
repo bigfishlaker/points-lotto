@@ -108,10 +108,84 @@ def require_api_key(f):
 
 @app.route('/')
 def dashboard():
-    """Main page - shows qualification checker"""
-    # Just call the qualified_users function directly
-    from app import qualified_users
-    return qualified_users()
+    """Main page - shows qualification checker (same as /qualified)"""
+    # Call qualified_users logic directly
+    if not POINTSMARKET_ENABLED:
+        return "PointsMarket integration not available", 404
+    
+    try:
+        from daily_points_tracker import DailyPointsTracker
+        from datetime import datetime, timedelta
+        
+        tracker = DailyPointsTracker()
+        view = request.args.get('view', 'min1')  # 'min1' or 'gain24'
+        
+        # Compute dataset based on view
+        qualified = []
+        is_baseline = False
+        
+        if view == 'min1':
+            # All users with at least 1 point
+            current_users = points_scraper.get_leaderboard(limit=None)
+            qualified = [u for u in current_users if (u.get('points', 0) or u.get('total_points', 0)) >= 1]
+        else:
+            # 24h gains view
+            today_str = datetime.now().strftime('%Y-%m-%d')
+            yesterday_str = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
+            
+            # Ensure we have today's snapshot
+            today_snapshot = tracker.load_snapshot(today_str)
+            if not today_snapshot:
+                current_users = points_scraper.get_leaderboard(limit=None)
+                tracker.save_snapshot(current_users)
+                today_snapshot = {u['username']: u for u in current_users}
+            
+            # Get yesterday's snapshot
+            yesterday_snapshot = tracker.load_snapshot(yesterday_str)
+            if not yesterday_snapshot:
+                is_baseline = True
+                yesterday_snapshot = {}
+            
+            # Calculate gains
+            current_users = points_scraper.get_leaderboard(limit=None)
+            today_dict = {u['username']: u for u in current_users}
+            
+            qualified = []
+            for username, user_data in today_dict.items():
+                points_now = user_data.get('points', 0) or user_data.get('total_points', 0)
+                points_yesterday = yesterday_snapshot.get(username, {}).get('points', 0) or yesterday_snapshot.get(username, {}).get('total_points', 0)
+                gain = points_now - points_yesterday
+                
+                if gain >= 1:
+                    user_data['gain'] = gain
+                    user_data['total_points'] = points_now
+                    qualified.append(user_data)
+        
+        # Sort by points (or gain if in gain24 view)
+        sort_key = 'gain' if view == 'gain24' else 'total_points'
+        qualified.sort(key=lambda x: x.get(sort_key, 0), reverse=True)
+        
+        # Add rank numbers
+        for idx, user in enumerate(qualified, 1):
+            user['rank'] = idx
+        
+        # Calculate next reset time (midnight)
+        now = datetime.now()
+        next_midnight = (now + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+        next_reset_iso = next_midnight.isoformat()
+        
+        # Get current daily winner
+        current_winner = db.get_current_daily_winner()
+        
+        return render_template('qualified.html',
+                             qualified_users=qualified[:100],  # Limit for initial display
+                             total=len(qualified),
+                             view=view,
+                             is_baseline=is_baseline,
+                             next_reset_iso=next_reset_iso,
+                             current_winner=current_winner)
+    except Exception as e:
+        return f"Error: {str(e)}", 500
 
 @app.route('/keywords')
 def keywords():
