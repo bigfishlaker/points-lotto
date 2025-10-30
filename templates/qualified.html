@@ -1025,10 +1025,11 @@
                        onkeyup="onSearchKey(event)"
                        style="width: 100%; margin: 0; background: rgba(255, 255, 255, 0.4); backdrop-filter: blur(6px);">
                 <div id="qualificationResult" style="display: none; padding: 12px; margin-top: 12px; border-radius: 0; font-size: 14px; background: rgba(220, 20, 60, 0.25); backdrop-filter: blur(8px); border: 1px solid rgba(220, 20, 60, 0.5); color: #222; font-weight: 500;"></div>
-                <div style="margin-top: 12px; display: flex; justify-content: center;">
+                <div style="margin-top: 12px; display: flex; align-items: center; justify-content: center; gap: 8px;">
                     <button class="btn" onclick="showWinnerRngProcess()" style="width: 48px; height: 48px; padding: 0; font-size: 28px; background: rgba(0, 150, 0, 0.3); border-color: rgba(0, 150, 0, 0.5); display: flex; align-items: center; justify-content: center; border-radius: 4px; cursor: pointer;">
                         🎲
                     </button>
+                    <span style="color: white; font-size: 14px; font-weight: 500;">see winner here</span>
                 </div>
             </div>
             </div>
@@ -1507,6 +1508,7 @@
                 .then(response => response.json())
                 .then(data => {
                     if (data.success && data.winner) {
+                        // Show RNG terminal with actual winner data
                         // Simulate the RNG process with actual data
                         setTimeout(() => {
                             addTerminalLine('$ Winner Selection Process', 'success');
@@ -1570,8 +1572,30 @@
                             }, 3000);
                         }, 300);
                     } else {
-                        addTerminalLine('$ No winner has been selected yet', 'error');
-                        addTerminalLine('$ A winner will be selected at midnight (00:00)', 'info');
+                        // No winner yet - show animated process anyway
+                        setTimeout(() => {
+                            addTerminalLine('$ Winner Selection Simulation', 'success');
+                            addTerminalLine('$ Status: Waiting for first drawing...', 'info');
+                            addTerminalLine('');
+                            
+                            addTerminalLine('$ Step 1: Fetching fresh leaderboard data...', 'info');
+                            setTimeout(() => addTerminalLine('  ⏳ Data fetching...', 'data'), 500);
+                            setTimeout(() => addTerminalLine('  ✅ Data fetched', 'success'), 1000);
+                            
+                            setTimeout(() => {
+                                addTerminalLine('');
+                                addTerminalLine('$ Step 2: Ready for qualification check...', 'info');
+                                addTerminalLine('  ⏳ Waiting for midnight reset...', 'data');
+                            }, 1500);
+                            
+                            setTimeout(() => {
+                                addTerminalLine('');
+                                addTerminalLine('', 'result');
+                                addTerminalLine('⏰ NO WINNER YET', 'error');
+                                addTerminalLine('   First winner will be selected at midnight', 'info');
+                                addTerminalLine('   (00:05 AM EST / 05:05 UTC)', 'info');
+                            }, 2500);
+                        }, 300);
                     }
                 })
                 .catch(error => {
