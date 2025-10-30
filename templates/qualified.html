@@ -1704,6 +1704,8 @@
                 });
         }
         
+        let hasShownWinnerOnLoad = false; // Track if we've shown winner on initial load
+        
         function displayWinner(winner, showTerminalAutomatically = false) {
             // Update header display (primary location)
             const headerCard = document.getElementById('winnerCardHeader');
@@ -1715,11 +1717,12 @@
                 headerCard.style.display = 'inline-flex';
             }
             
-            // Optionally show terminal automatically when new winner is detected
-            if (showTerminalAutomatically) {
+            // Show terminal automatically when new winner is detected OR on first load
+            if (showTerminalAutomatically || !hasShownWinnerOnLoad) {
                 setTimeout(() => {
                     showWinnerRngProcess();
                 }, 1000); // Show terminal 1 second after winner is displayed
+                hasShownWinnerOnLoad = true;
             }
         }
         
