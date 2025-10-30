@@ -357,6 +357,35 @@ def api_start_lottery_scheduler():
             'message': f'Error starting lottery scheduler: {str(e)}'
         })
 
+@app.route('/api/reset_winners', methods=['POST'])
+@require_api_key
+def api_reset_winners():
+    """Reset all daily winners (admin only)"""
+    import sqlite3
+    
+    try:
+        conn = sqlite3.connect(db.db_path)
+        cursor = conn.cursor()
+        
+        # Get count before deletion
+        cursor.execute('SELECT COUNT(*) FROM daily_winners')
+        count = cursor.fetchone()[0]
+        
+        # Delete all winners
+        cursor.execute('DELETE FROM daily_winners')
+        conn.commit()
+        conn.close()
+        
+        return jsonify({
+            'success': True,
+            'message': f'Successfully cleared {count} winner(s). System ready for fresh drawing.'
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
 @app.route('/api/stop_lottery_scheduler', methods=['POST'])
 @require_api_key
 def api_stop_lottery_scheduler():
