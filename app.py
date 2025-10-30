@@ -140,6 +140,7 @@ def dashboard():
         # Get last winner's snapshot for round-based qualification
         last_snapshot_date = db.get_last_winner_snapshot_date()
         qualified = []
+        is_baseline = False
         
         if last_snapshot_date:
             # Round-based: show ALL users, mark only those who gained +1 as qualified
