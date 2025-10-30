@@ -142,7 +142,7 @@ def dashboard():
         qualified = []
         
         if last_snapshot_date:
-            # Round-based: only users who gained +1 since last snapshot
+            # Round-based: show ALL users, mark only those who gained +1 as qualified
             tracker = DailyPointsTracker()
             previous_snapshot = tracker.load_snapshot(last_snapshot_date)
             
@@ -153,27 +153,29 @@ def dashboard():
                 for username in current_dict:
                     current_user = current_dict[username]
                     current_points = current_user.get('total_points', 0)
+                    qualifies = False
+                    gain = 0
+                    baseline = 0
                     
                     if username in previous_users:
                         previous_points = previous_users[username].get('total_points', 0)
                         gain = current_points - previous_points
-                        
-                        if gain >= 1:
-                            qualified.append({
-                                'username': username,
-                                'total_points': current_points,
-                                'gain': gain,
-                                'baseline': previous_points
-                            })
+                        baseline = previous_points
+                        if gain >= 1 and current_points >= 1:
+                            qualifies = True
                     else:
                         # New user
                         if current_points >= 1:
-                            qualified.append({
-                                'username': username,
-                                'total_points': current_points,
-                                'gain': current_points,
-                                'baseline': 0
-                            })
+                            gain = current_points
+                            qualifies = True
+                    
+                    qualified.append({
+                        'username': username,
+                        'total_points': current_points,
+                        'gain': gain,
+                        'baseline': baseline,
+                        'qualifies': qualifies
+                    })
         
         # Sort by total points and add rank numbers
         qualified.sort(key=lambda x: x.get('total_points', 0), reverse=True)
@@ -188,9 +190,12 @@ def dashboard():
         # Get current daily winner
         current_winner = db.get_current_daily_winner()
         
+        # Count how many actually qualify
+        actually_qualified = sum(1 for u in qualified if u.get('qualifies', False)) if qualified else 0
+        
         return render_template('qualified.html',
                              qualified_users=qualified,
-                             total=len(qualified),
+                             total=actually_qualified,
                              is_baseline=not last_snapshot_date,
                              next_reset_iso=next_reset_iso,
                              current_winner=current_winner)
