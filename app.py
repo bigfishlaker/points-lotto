@@ -150,32 +150,47 @@ def dashboard():
                 current_dict = {u['username']: u for u in current_users}
                 previous_users = previous_snapshot.get('users', {})
                 
-                for username in current_dict:
-                    current_user = current_dict[username]
-                    current_points = current_user.get('total_points', 0)
-                    qualifies = False
-                    gain = 0
-                    baseline = 0
-                    
-                    if username in previous_users:
-                        previous_points = previous_users[username].get('total_points', 0)
-                        gain = current_points - previous_points
-                        baseline = previous_points
-                        if gain >= 1 and current_points >= 1:
-                            qualifies = True
-                    else:
-                        # New user
+                # Check if snapshot has actual user data
+                if previous_users and len(previous_users) > 0:
+                    # We have a valid snapshot with user data
+                    for username in current_dict:
+                        current_user = current_dict[username]
+                        current_points = current_user.get('total_points', 0)
+                        qualifies = False
+                        gain = 0
+                        baseline = 0
+                        
+                        if username in previous_users:
+                            previous_points = previous_users[username].get('total_points', 0)
+                            gain = current_points - previous_points
+                            baseline = previous_points
+                            if gain >= 1 and current_points >= 1:
+                                qualifies = True
+                        else:
+                            # New user
+                            if current_points >= 1:
+                                gain = current_points
+                                qualifies = True
+                        
+                        qualified.append({
+                            'username': username,
+                            'total_points': current_points,
+                            'gain': gain,
+                            'baseline': baseline,
+                            'qualifies': qualifies
+                        })
+                else:
+                    # Snapshot exists but is empty - treat as baseline
+                    for user in current_users:
+                        current_points = user.get('total_points', 0)
                         if current_points >= 1:
-                            gain = current_points
-                            qualifies = True
-                    
-                    qualified.append({
-                        'username': username,
-                        'total_points': current_points,
-                        'gain': gain,
-                        'baseline': baseline,
-                        'qualifies': qualifies
-                    })
+                            qualified.append({
+                                'username': user['username'],
+                                'total_points': current_points,
+                                'gain': 0,
+                                'baseline': 0,
+                                'qualifies': True
+                            })
         else:
             # No previous snapshot - show all users with all marked as qualified for initial display
             for user in current_users:
@@ -552,32 +567,47 @@ def api_qualified():
                 current_dict = {u['username']: u for u in current_users}
                 previous_users = previous_snapshot.get('users', {})
                 
-                for username in current_dict:
-                    current_user = current_dict[username]
-                    current_points = current_user.get('total_points', 0)
-                    qualifies = False
-                    gain = 0
-                    baseline = 0
-                    
-                    if username in previous_users:
-                        previous_points = previous_users[username].get('total_points', 0)
-                        gain = current_points - previous_points
-                        baseline = previous_points
-                        if gain >= 1 and current_points >= 1:
-                            qualifies = True
-                    else:
-                        # New user
+                # Check if snapshot has actual user data
+                if previous_users and len(previous_users) > 0:
+                    # We have a valid snapshot with user data
+                    for username in current_dict:
+                        current_user = current_dict[username]
+                        current_points = current_user.get('total_points', 0)
+                        qualifies = False
+                        gain = 0
+                        baseline = 0
+                        
+                        if username in previous_users:
+                            previous_points = previous_users[username].get('total_points', 0)
+                            gain = current_points - previous_points
+                            baseline = previous_points
+                            if gain >= 1 and current_points >= 1:
+                                qualifies = True
+                        else:
+                            # New user
+                            if current_points >= 1:
+                                gain = current_points
+                                qualifies = True
+                        
+                        qualified.append({
+                            'username': username,
+                            'total_points': current_points,
+                            'gain': gain,
+                            'baseline': baseline,
+                            'qualifies': qualifies
+                        })
+                else:
+                    # Snapshot exists but is empty - treat as baseline
+                    for user in current_users:
+                        current_points = user.get('total_points', 0)
                         if current_points >= 1:
-                            gain = current_points
-                            qualifies = True
-                    
-                    qualified.append({
-                        'username': username,
-                        'total_points': current_points,
-                        'gain': gain,
-                        'baseline': baseline,
-                        'qualifies': qualifies
-                    })
+                            qualified.append({
+                                'username': user['username'],
+                                'total_points': current_points,
+                                'gain': 0,
+                                'baseline': 0,
+                                'qualifies': True
+                            })
         else:
             # No previous snapshot - show all users with all marked as qualified for initial display
             for user in current_users:
