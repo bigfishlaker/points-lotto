@@ -174,9 +174,6 @@ def dashboard():
                                 'gain': current_points,
                                 'baseline': 0
                             })
-        else:
-            # First round: all users with ≥1 point
-            qualified = [u for u in current_users if u.get('total_points', 0) >= 1]
         
         # Sort by total points and add rank numbers
         qualified.sort(key=lambda x: x.get('total_points', 0), reverse=True)
@@ -530,7 +527,7 @@ def api_qualified():
         qualified = []
         
         if last_snapshot_date:
-            # Round-based: only users who gained +1 since last snapshot
+            # Round-based: show ALL users, mark only those who gained +1 as qualified
             tracker = DailyPointsTracker()
             previous_snapshot = tracker.load_snapshot(last_snapshot_date)
             
@@ -541,30 +538,29 @@ def api_qualified():
                 for username in current_dict:
                     current_user = current_dict[username]
                     current_points = current_user.get('total_points', 0)
+                    qualifies = False
+                    gain = 0
+                    baseline = 0
                     
                     if username in previous_users:
                         previous_points = previous_users[username].get('total_points', 0)
                         gain = current_points - previous_points
-                        
-                        if gain >= 1:  # Must gain at least 1 point
-                            qualified.append({
-                                'username': username,
-                                'total_points': current_points,
-                                'gain': gain,
-                                'baseline': previous_points
-                            })
+                        baseline = previous_points
+                        if gain >= 1 and current_points >= 1:
+                            qualifies = True
                     else:
                         # New user
                         if current_points >= 1:
-                            qualified.append({
-                                'username': username,
-                                'total_points': current_points,
-                                'gain': current_points,
-                                'baseline': 0
-                            })
-        else:
-            # First round: all users with ≥1 point
-            qualified = [u for u in current_users if u.get('total_points', 0) >= 1]
+                            gain = current_points
+                            qualifies = True
+                    
+                    qualified.append({
+                        'username': username,
+                        'total_points': current_points,
+                        'gain': gain,
+                        'baseline': baseline,
+                        'qualifies': qualifies
+                    })
 
         # Sort by total points
         qualified.sort(key=lambda x: x.get('total_points', 0), reverse=True)
@@ -576,10 +572,14 @@ def api_qualified():
         if limit is not None and limit > 0:
             qualified = qualified[:limit]
 
+        # Count how many actually qualify
+        actually_qualified = sum(1 for u in qualified if u.get('qualifies', False))
+        
         return jsonify({
             'success': True,
             'qualified_users': qualified,
             'total': len(qualified),
+            'qualified_count': actually_qualified,
             'baseline_date': last_snapshot_date
         })
     except Exception as e:

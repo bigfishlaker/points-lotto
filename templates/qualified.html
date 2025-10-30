@@ -1035,7 +1035,7 @@
             
             <!-- Info banner -->
             <div class="info-banner" id="infoBanner">
-                <strong>Live Qualification Check:</strong> Only showing users who gained 1+ points since the last winner selection. Search for your Twitter username to check if you're in the next drawing! Don't be afraid - only 1 ticket per user. Data updates every 5 minutes.
+                <strong>Live Qualification Check:</strong> Showing all users. Only those who gained 1+ points since the last winner selection are qualified for the next drawing. Search for your Twitter username to check if you're in the next drawing! Don't be afraid - only 1 ticket per user. Data updates every 5 minutes.
             </div>
         </div>
         
@@ -1337,6 +1337,7 @@
                 const points = user.total_points || 0;
                 const rank = user.rank || index + 1;
                 const gain = user.gain || 0;
+                const qualifies = user.qualifies !== undefined ? user.qualifies : true; // Default to true if not set
                 const highlightClass = searchTerm && username.toLowerCase().includes(searchTerm) ? 'highlight' : '';
                 
                 const avatarUrl = username ? `https://unavatar.io/twitter/${username}` : '';
@@ -1344,6 +1345,11 @@
                 const avatarHTML = username ? `
                     <span class="avatar"><img src="${avatarUrl}" alt="@${username}" onerror="this.onerror=null;this.parentNode.textContent='${initials}';this.remove();" /></span>
                 ` : `<span class="avatar">${initials}</span>`;
+                
+                const statusBadge = qualifies 
+                    ? '<span class="badge badge-qualified">✓ Qualifies</span>'
+                    : '<span class="badge" style="background: #1a1a1a; color: #999; border: 1px solid #333;">✗ Not Qualified</span>';
+                
                 html += `
                     <tr class="${highlightClass}">
                         <td><strong>${index + 1}</strong></td>
@@ -1357,8 +1363,8 @@
                             </a>
                         </td>
                         <td class="points">${points}</td>
-                        <td style="color: #28a745; font-weight: 600;">+${gain}</td>
-                        <td><span class="badge badge-qualified">✓ Qualifies</span></td>
+                        <td style="color: ${gain > 0 ? '#28a745' : '#999'}; font-weight: 600;">${gain > 0 ? '+' + gain : '0'}</td>
+                        <td>${statusBadge}</td>
                     </tr>
                 `;
             });
@@ -1401,7 +1407,8 @@
                         displayUsers(allUsers, 100);
                         document.getElementById('lastUpdate').textContent = new Date().toLocaleTimeString();
                         // Update labels and counts
-                        document.getElementById('totalUsers').textContent = data.total;
+                        const qualifiedCount = data.qualified_count || data.total;
+                        document.getElementById('totalUsers').textContent = qualifiedCount;
                         document.getElementById('totalUsersLabel').textContent = 'Qualified Users';
                         updateCountdownVisibility();
                     } else {
