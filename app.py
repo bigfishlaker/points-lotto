@@ -176,6 +176,18 @@ def dashboard():
                         'baseline': baseline,
                         'qualifies': qualifies
                     })
+        else:
+            # No previous snapshot - show all users with all marked as qualified for initial display
+            for user in current_users:
+                current_points = user.get('total_points', 0)
+                if current_points >= 1:  # Only show users with at least 1 point
+                    qualified.append({
+                        'username': user['username'],
+                        'total_points': current_points,
+                        'gain': 0,
+                        'baseline': 0,
+                        'qualifies': True
+                    })
         
         # Sort by total points and add rank numbers
         qualified.sort(key=lambda x: x.get('total_points', 0), reverse=True)
@@ -565,6 +577,18 @@ def api_qualified():
                         'gain': gain,
                         'baseline': baseline,
                         'qualifies': qualifies
+                    })
+        else:
+            # No previous snapshot - show all users with all marked as qualified for initial display
+            for user in current_users:
+                current_points = user.get('total_points', 0)
+                if current_points >= 1:  # Only show users with at least 1 point
+                    qualified.append({
+                        'username': user['username'],
+                        'total_points': current_points,
+                        'gain': 0,
+                        'baseline': 0,
+                        'qualifies': True
                     })
 
         # Sort by total points
