@@ -749,9 +749,15 @@ def select_daily_winner_with_fresh_data():
 _winner_selection_lock = threading.Lock()
 
 def daily_winner_scheduler():
-    """Background thread that selects winner automatically at midnight - GUARANTEED one winner per day"""
+    """Background thread that selects winner automatically at midnight EST - GUARANTEED one winner per day"""
+    from datetime import timezone, timedelta
+    
+    # EST is UTC-5, EDT is UTC-4
+    est = timezone(timedelta(hours=-5))
+    edt = timezone(timedelta(hours=-4))
+    
     print("🕐 Daily winner scheduler started")
-    print("   Will select winner at midnight (00:00) each day")
+    print("   Will select winner at midnight EST (00:00 EST = 05:00 UTC) each day")
     print("   Checks every minute - waits for timer, then fetches fresh data")
     print("   🔒 Thread-safe lock ensures only ONE winner per day")
     
@@ -759,11 +765,19 @@ def daily_winner_scheduler():
     
     while True:
         try:
-            now = datetime.now()
-            current_date = now.date()
+            # Get current UTC time
+            now_utc = datetime.now(timezone.utc)
             
-            # Check if we're past midnight (00:01-00:05 window to catch it reliably)
-            if now.hour == 0 and 1 <= now.minute <= 5:
+            # Determine if we're in daylight saving time (roughly Mar-Nov)
+            is_dst = now_utc.month >= 3 and now_utc.month < 11
+            est_offset = edt if is_dst else est
+            
+            # Convert to EST
+            now_est = now_utc.astimezone(est_offset)
+            current_date = now_est.date()
+            
+            # Check if we're past midnight EST (00:01-00:05 window to catch it reliably)
+            if now_est.hour == 0 and 1 <= now_est.minute <= 5:
                 # New day detected, check if we've already processed it
                 if last_processed_date != current_date:
                     # USE LOCK to prevent concurrent selections
@@ -773,7 +787,7 @@ def daily_winner_scheduler():
                         existing = db.get_winner_for_date(today_str)
                         
                         if not existing:
-                            print(f"\n⏰ MIDNIGHT DETECTED! {now.strftime('%Y-%m-%d %H:%M:%S')}")
+                            print(f"\n⏰ MIDNIGHT EST DETECTED! {now_est.strftime('%Y-%m-%d %H:%M:%S EST')} ({now_utc.strftime('%H:%M:%S UTC')})")
                             print("=" * 60)
                             print("🚀 Timer has reached zero - selecting winner NOW")
                             print("🔒 Lock acquired - ensuring single winner selection")
@@ -796,7 +810,7 @@ def daily_winner_scheduler():
                     last_processed_date = current_date
             else:
                 # Update last_processed_date when we're past the midnight window
-                if now.hour > 0:
+                if now_est.hour > 0:
                     last_processed_date = current_date
             
             # Sleep for 60 seconds before checking again
@@ -810,6 +824,7 @@ def daily_winner_scheduler():
 
 # Start scheduler immediately when module is imported (works with gunicorn)
 # Must be called after daily_winner_scheduler function is defined
+# ENABLED: Automatic winner selection at midnight EST
 ensure_scheduler_started()
 
 @app.route('/api/select_winner', methods=['POST'])
