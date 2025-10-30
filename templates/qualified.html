@@ -1301,6 +1301,14 @@
         }
         
         function displayUsers(users, limit = 100) {
+            // Safety check - ensure users is an array
+            if (!users || !Array.isArray(users)) {
+                console.error('displayUsers called with invalid data:', users);
+                const container = document.getElementById('tableContainer');
+                container.innerHTML = '<div class="no-results"><h3>Loading users...</h3><p>Please wait while we fetch the latest data.</p></div>';
+                return;
+            }
+            
             allUsers = users;
             currentLimit = limit;
             const container = document.getElementById('tableContainer');
