@@ -78,7 +78,6 @@ if POINTSMARKET_ENABLED:
 monitor_thread = None
 lottery_thread = None
 daily_winner_scheduler_thread = None
-snapshot_thread = None
 _scheduler_started = False
 
 def ensure_scheduler_started():
@@ -965,37 +964,6 @@ if os.getenv('INIT_WINNER') == 'true':
         init_winner()
     except Exception as e:
         print(f"Warning: Could not initialize winner: {e}")
-
-def snapshot_updater():
-    """Background thread that takes snapshots every 5 minutes"""
-    print("📸 Starting snapshot updater (every 5 minutes)...")
-    while True:
-        try:
-            if POINTSMARKET_ENABLED:
-                print(f"📸 [{datetime.now().strftime('%H:%M:%S')}] Taking snapshot...")
-                from daily_points_tracker import DailyPointsTracker
-                tracker = DailyPointsTracker()
-                current_users = points_scraper.get_leaderboard(limit=None)
-                tracker.save_snapshot(current_users)
-                print(f"✅ Snapshot saved: {len(current_users)} users")
-            # Sleep for 5 minutes (300 seconds)
-            time.sleep(300)
-        except Exception as e:
-            print(f"❌ Error in snapshot updater: {e}")
-            time.sleep(60)
-
-def ensure_snapshot_thread_started():
-    """Start the snapshot updater thread"""
-    global snapshot_thread
-    if snapshot_thread is None:
-        snapshot_thread = threading.Thread(target=snapshot_updater, daemon=True)
-        snapshot_thread.start()
-        print("✅ Snapshot updater thread started")
-
-# Start background threads
-# ENABLED: Automatic snapshot updates every 5 minutes
-if POINTSMARKET_ENABLED:
-    ensure_snapshot_thread_started()
 
 # Start scheduler immediately when module is imported (works with gunicorn)
 # Must be called after daily_winner_scheduler function is defined
