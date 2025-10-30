@@ -1072,22 +1072,34 @@
         let countdownInterval = null;
         let autoRefreshInterval = null;
         
-        // Initialize reset time
+        // Initialize reset time - calculate next midnight EST
+        function calculateNextMidnightEST() {
+            const now = new Date();
+            // Get current time in EST (considering DST)
+            const estOffset = -5; // EST offset
+            const nowEST = new Date(now.getTime() + (now.getTimezoneOffset() + estOffset * 60) * 60 * 1000);
+            
+            // Calculate next midnight EST
+            const nextMidnight = new Date(nowEST);
+            nextMidnight.setDate(nextMidnight.getDate() + 1);
+            nextMidnight.setHours(0, 0, 0, 0);
+            
+            // Convert back to UTC for countdown
+            return new Date(nextMidnight.getTime() - (estOffset * 60) * 60 * 1000);
+        }
+        
         try {
-            nextResetTime = new Date('{{ next_reset_iso|default("") }}');
-            if (isNaN(nextResetTime.getTime())) {
-                // Calculate next midnight if not provided
-                const now = new Date();
-                nextResetTime = new Date(now);
-                nextResetTime.setDate(nextResetTime.getDate() + 1);
-                nextResetTime.setHours(0, 0, 0, 0);
+            const providedTime = '{{ next_reset_iso|default("") }}';
+            if (providedTime) {
+                nextResetTime = new Date(providedTime);
+                if (isNaN(nextResetTime.getTime())) {
+                    nextResetTime = calculateNextMidnightEST();
+                }
+            } else {
+                nextResetTime = calculateNextMidnightEST();
             }
         } catch(e) {
-            // Calculate next midnight as fallback
-            const now = new Date();
-            nextResetTime = new Date(now);
-            nextResetTime.setDate(nextResetTime.getDate() + 1);
-            nextResetTime.setHours(0, 0, 0, 0);
+            nextResetTime = calculateNextMidnightEST();
         }
         
         function fillSearchBar(username) {
@@ -1423,10 +1435,8 @@
                 // Poll more aggressively to catch new winner (scheduler runs at 00:01-00:05)
                 loadCurrentWinner(false); // First check, don't show terminal yet
                 
-                // Reset happened, recalculate for next midnight
-                nextResetTime = new Date(now);
-                nextResetTime.setDate(nextResetTime.getDate() + 1);
-                nextResetTime.setHours(0, 0, 0, 0);
+                // Reset happened, recalculate for next midnight EST
+                nextResetTime = calculateNextMidnightEST();
                 
                 // Poll every 5 seconds for next 2 minutes to catch winner selection
                 let pollCount = 0;
