@@ -11,5 +11,7 @@ services:
         sync: false
       - key: DEBUG
         value: False
+      - key: INIT_WINNER
+        value: "true"
     pythonVersion: "3.13.4"
 

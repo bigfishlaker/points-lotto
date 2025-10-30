@@ -910,6 +910,14 @@ def daily_winner_scheduler():
             traceback.print_exc()
             time.sleep(60)  # Wait before retrying
 
+# Initialize winner on startup if flag is set
+if os.getenv('INIT_WINNER') == 'true':
+    try:
+        from init_winner import init_winner
+        init_winner()
+    except Exception as e:
+        print(f"Warning: Could not initialize winner: {e}")
+
 # Start scheduler immediately when module is imported (works with gunicorn)
 # Must be called after daily_winner_scheduler function is defined
 # ENABLED: Automatic winner selection at midnight EST
