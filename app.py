@@ -665,8 +665,17 @@ def select_daily_winner_with_fresh_data():
     
     try:
         from daily_points_tracker import DailyPointsTracker
+        from datetime import timezone, timedelta
         
-        print(f"\n🎯 [{datetime.now().strftime('%H:%M:%S')}] Starting daily winner selection...")
+        # Use EST for date tracking
+        est = timezone(timedelta(hours=-5))
+        edt = timezone(timedelta(hours=-4))
+        now_utc = datetime.now(timezone.utc)
+        is_dst = now_utc.month >= 3 and now_utc.month < 11
+        est_offset = edt if is_dst else est
+        now_est = now_utc.astimezone(est_offset)
+        
+        print(f"\n🎯 [{now_est.strftime('%H:%M:%S EST')}] Starting daily winner selection...")
         
         # STEP 1: Fetch FRESH data from PointsMarket
         print("📊 Fetching fresh leaderboard data from PointsMarket...")
@@ -674,8 +683,8 @@ def select_daily_winner_with_fresh_data():
         current_users = points_scraper.get_leaderboard(limit=None)
         print(f"✅ Fetched {len(current_users)} users")
         
-        # STEP 2: Save today's snapshot (with fresh data)
-        today_str = datetime.now().strftime('%Y-%m-%d')
+        # STEP 2: Save today's snapshot (with fresh data) - using EST date
+        today_str = now_est.date().isoformat()
         print(f"💾 Saving snapshot for {today_str}...")
         tracker.save_snapshot(current_users)
         today_snapshot = tracker.load_snapshot(today_str)
@@ -762,8 +771,8 @@ def select_daily_winner_with_fresh_data():
         
         print(f"✅ {len(qualified)} qualified users")
         
-        # STEP 6: Check if winner already exists for today
-        drawing_date = date.today().isoformat()
+        # STEP 6: Check if winner already exists for today - using EST date
+        drawing_date = now_est.date().isoformat()
         existing = db.get_winner_for_date(drawing_date)
         if existing:
             print(f"✅ Winner already selected for {drawing_date}: @{existing['username']}")

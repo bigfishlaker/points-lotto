@@ -1075,8 +1075,13 @@
         // Initialize reset time - calculate next midnight EST
         function calculateNextMidnightEST() {
             const now = new Date();
+            
             // Get current time in EST (considering DST)
-            const estOffset = -5; // EST offset
+            // Check if we're in DST (roughly March-November)
+            const month = now.getUTCMonth();
+            const isDST = month >= 2 && month < 10; // March (2) through October (9)
+            const estOffset = isDST ? -4 : -5; // EDT is UTC-4, EST is UTC-5
+            
             const nowEST = new Date(now.getTime() + (now.getTimezoneOffset() + estOffset * 60) * 60 * 1000);
             
             // Calculate next midnight EST
