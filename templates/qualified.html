@@ -1084,10 +1084,10 @@
             
             const nowEST = new Date(now.getTime() + (now.getTimezoneOffset() + estOffset * 60) * 60 * 1000);
             
-            // Calculate next midnight EST
+            // Calculate next midnight EST + 5 minutes (for PointsMarket update fairness)
             const nextMidnight = new Date(nowEST);
             nextMidnight.setDate(nextMidnight.getDate() + 1);
-            nextMidnight.setHours(0, 0, 0, 0);
+            nextMidnight.setHours(0, 5, 0, 0);  // 00:05 EST
             
             // Convert back to UTC for countdown
             return new Date(nextMidnight.getTime() - (estOffset * 60) * 60 * 1000);

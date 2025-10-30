@@ -842,7 +842,8 @@ def daily_winner_scheduler():
     edt = timezone(timedelta(hours=-4))
     
     print("🕐 Daily winner scheduler started")
-    print("   Will select winner at midnight EST (00:00 EST = 05:00 UTC) each day")
+    print("   Will select winner at 00:05 EST (5 minutes after midnight) each day")
+    print("   Waits 5 minutes after midnight for PointsMarket hourly update")
     print("   Checks every minute - waits for timer, then fetches fresh data")
     print("   🔒 Thread-safe lock ensures only ONE winner per day")
     
@@ -861,8 +862,8 @@ def daily_winner_scheduler():
             now_est = now_utc.astimezone(est_offset)
             current_date = now_est.date()
             
-            # Check if we're past midnight EST (00:01-00:05 window to catch it reliably)
-            if now_est.hour == 0 and 1 <= now_est.minute <= 5:
+            # Check if we're past midnight EST (00:05-00:10 window for fairness - wait for PointsMarket to update)
+            if now_est.hour == 0 and 5 <= now_est.minute <= 10:
                 # New day detected, check if we've already processed it
                 if last_processed_date != current_date:
                     # USE LOCK to prevent concurrent selections
@@ -873,7 +874,9 @@ def daily_winner_scheduler():
                         
                         if not existing:
                             print(f"\n⏰ MIDNIGHT EST DETECTED! {now_est.strftime('%Y-%m-%d %H:%M:%S EST')} ({now_utc.strftime('%H:%M:%S UTC')})")
+                            print("⏳ Waiting 5 minutes after midnight for PointsMarket to update...")
                             print("=" * 60)
+                            time.sleep(300)  # Wait 5 minutes for PointsMarket hourly update
                             print("🚀 Timer has reached zero - selecting winner NOW")
                             print("🔒 Lock acquired - ensuring single winner selection")
                             print("📊 Step 1: Fetching FRESH data from PointsMarket...")
