@@ -105,6 +105,10 @@ class DatabaseManager:
         except sqlite3.OperationalError:
             pass
         try:
+            cursor.execute('ALTER TABLE daily_winners ADD COLUMN snapshot_date TEXT')
+        except sqlite3.OperationalError:
+            pass
+        try:
             cursor.execute('ALTER TABLE daily_winners ADD COLUMN selection_hash TEXT')
         except sqlite3.OperationalError:
             pass
@@ -314,7 +318,7 @@ class DatabaseManager:
             'keyword': result[7]
         } for result in results]
     
-    def record_daily_winner(self, username: str, points: int, drawing_date: str = None, total_eligible: int = None, random_seed: int = None, selection_hash: str = None) -> bool:
+    def record_daily_winner(self, username: str, points: int, drawing_date: str = None, total_eligible: int = None, random_seed: int = None, selection_hash: str = None, snapshot_date: str = None) -> bool:
         """Record a daily 24h lottery winner with audit trail - GUARANTEED only one winner per day"""
         from datetime import datetime, date
         import hashlib
@@ -355,9 +359,9 @@ class DatabaseManager:
             
             # Insert new winner - UNIQUE constraint on drawing_date will prevent duplicates
             cursor.execute('''
-                INSERT INTO daily_winners (winner_username, winner_points, drawing_date, is_current, total_eligible, random_seed, selection_hash)
-                VALUES (?, ?, ?, 1, ?, ?, ?)
-            ''', (username, points, drawing_date, total_eligible, random_seed, selection_hash))
+                INSERT INTO daily_winners (winner_username, winner_points, drawing_date, is_current, total_eligible, random_seed, selection_hash, snapshot_date)
+                VALUES (?, ?, ?, 1, ?, ?, ?, ?)
+            ''', (username, points, drawing_date, total_eligible, random_seed, selection_hash, snapshot_date))
             
             conn.commit()
             conn.close()
@@ -386,7 +390,7 @@ class DatabaseManager:
         cursor = conn.cursor()
         
         cursor.execute('''
-            SELECT winner_username, winner_points, drawing_date, selected_at, total_eligible, random_seed, selection_hash
+            SELECT winner_username, winner_points, drawing_date, selected_at, total_eligible, random_seed, selection_hash, snapshot_date
             FROM daily_winners
             WHERE is_current = 1
             ORDER BY selected_at DESC
@@ -404,7 +408,8 @@ class DatabaseManager:
                 'selected_at': result[3],
                 'total_eligible': result[4],
                 'random_seed': result[5],
-                'selection_hash': result[6]
+                'selection_hash': result[6],
+                'snapshot_date': result[7]
             }
         return None
 
@@ -413,7 +418,7 @@ class DatabaseManager:
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
         cursor.execute('''
-            SELECT winner_username, winner_points, drawing_date, selected_at
+            SELECT winner_username, winner_points, drawing_date, selected_at, snapshot_date
             FROM daily_winners
             WHERE drawing_date = ?
             LIMIT 1
@@ -425,7 +430,25 @@ class DatabaseManager:
                 'username': result[0],
                 'points': result[1],
                 'drawing_date': result[2],
-                'selected_at': result[3]
+                'selected_at': result[3],
+                'snapshot_date': result[4]
             }
+        return None
+    
+    def get_last_winner_snapshot_date(self) -> Optional[str]:
+        """Get the snapshot date used for the last winner selection"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT snapshot_date
+            FROM daily_winners
+            WHERE snapshot_date IS NOT NULL
+            ORDER BY selected_at DESC
+            LIMIT 1
+        ''')
+        result = cursor.fetchone()
+        conn.close()
+        if result:
+            return result[0]
         return None
 

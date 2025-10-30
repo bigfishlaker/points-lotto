@@ -680,16 +680,63 @@ def select_daily_winner_with_fresh_data():
         tracker.save_snapshot(current_users)
         today_snapshot = tracker.load_snapshot(today_str)
         
-        # STEP 3: Compare to yesterday to find 24h gains
-        print("📈 Comparing to yesterday's data to find 24h gains...")
-        gains_data = tracker.get_daily_gains(min_gain=1)
+        # STEP 3: Get last winner's snapshot date (round-based qualification)
+        last_snapshot_date = db.get_last_winner_snapshot_date()
+        print(f"📅 Last winner's snapshot: {last_snapshot_date or 'First round'}")
+
+        # STEP 4: Compare to last winner's snapshot to find gains since last round
+        if last_snapshot_date and last_snapshot_date != today_str:
+            print(f"📈 Comparing current data ({today_str}) to last round ({last_snapshot_date})...")
+            previous_snapshot = tracker.load_snapshot(last_snapshot_date)
+            
+            if previous_snapshot:
+                gains_data = {
+                    'round_based': True,
+                    'gains': []
+                }
+                
+                # Compare current vs previous snapshot
+                today_users = today_snapshot.get('users', {})
+                previous_users = previous_snapshot.get('users', {})
+                
+                for username in today_users:
+                    today_user = today_users[username]
+                    today_points = today_user.get('total_points', 0)
+                    
+                    if username in previous_users:
+                        previous_points = previous_users[username].get('total_points', 0)
+                        gain = today_points - previous_points
+                        
+                        if gain >= 1:  # Must gain at least 1 point since last round
+                            gains_data['gains'].append({
+                                'username': username,
+                                'previous_points': previous_points,
+                                'today_points': today_points,
+                                'gain': gain
+                            })
+                    else:
+                        # New user since last round
+                        if today_points >= 1:
+                            gains_data['gains'].append({
+                                'username': username,
+                                'previous_points': 0,
+                                'today_points': today_points,
+                                'gain': today_points
+                            })
+            else:
+                print(f"⚠️ Previous snapshot {last_snapshot_date} not found, using baseline")
+                gains_data = {'baseline_created': True, 'gains': []}
+        else:
+            # First round or no previous snapshot
+            print("📈 First round - using baseline comparison...")
+            gains_data = tracker.get_daily_gains(min_gain=1)
         
-        # STEP 4: Build qualified users list
+        # STEP 5: Build qualified users list
         qualified = []
         
         if gains_data.get('baseline_created'):
             # First day - all users with ≥1 point
-            print("📅 First day - using all users with ≥1 point")
+            print("📅 First round - using all users with ≥1 point")
             for username, user_data in today_snapshot.get('users', {}).items():
                 total_pts = user_data.get('total_points', 0)
                 if total_pts >= 1:
@@ -698,12 +745,11 @@ def select_daily_winner_with_fresh_data():
                         'total_points': total_pts
                     })
         elif gains_data.get('gains'):
-            # Normal day - only users who gained +1 AND have ≥1 total
-            print(f"📊 Found {len(gains_data['gains'])} users who gained 1+ points")
+            # Round-based - only users who gained +1 since last winner
+            print(f"📊 Found {len(gains_data['gains'])} users who gained 1+ points since last round")
             for gain_info in gains_data['gains']:
                 username = gain_info['username']
-                user_data = today_snapshot.get('users', {}).get(username, {})
-                total_pts = user_data.get('total_points', gain_info['today_points'])
+                total_pts = gain_info['today_points']
                 if total_pts >= 1:
                     qualified.append({
                         'username': username,
@@ -716,14 +762,14 @@ def select_daily_winner_with_fresh_data():
         
         print(f"✅ {len(qualified)} qualified users")
         
-        # STEP 5: Check if winner already exists for today
+        # STEP 6: Check if winner already exists for today
         drawing_date = date.today().isoformat()
         existing = db.get_winner_for_date(drawing_date)
         if existing:
             print(f"✅ Winner already selected for {drawing_date}: @{existing['username']}")
             return existing
         
-        # STEP 6: Select winner randomly
+        # STEP 7: Select winner randomly
         print("🎲 Selecting random winner...")
         seed_string = f"{drawing_date}{datetime.now().isoformat()}{len(qualified)}"
         random_seed = int(hashlib.sha256(seed_string.encode()).hexdigest()[:8], 16) % 1000000
@@ -741,12 +787,13 @@ def select_daily_winner_with_fresh_data():
             f"{drawing_date}{winner_username}{winner_points}{random_seed}{len(qualified)}".encode()
         ).hexdigest()[:16]
         
-        # STEP 7: Save winner
+        # STEP 8: Save winner with snapshot date for next round
         success = db.record_daily_winner(
             winner_username, winner_points, drawing_date, 
             total_eligible=len(qualified),
             random_seed=random_seed,
-            selection_hash=selection_hash
+            selection_hash=selection_hash,
+            snapshot_date=today_str  # Store snapshot date for next round's comparison
         )
         
         if success:
