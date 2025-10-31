@@ -91,7 +91,7 @@
         /* Stats Grid */
         .stats-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            grid-template-columns: repeat(2, 1fr);
             gap: 16px;
             margin-bottom: 40px;
         }
@@ -650,6 +650,11 @@
                 <div class="stat-label">Qualified Users</div>
                 <div class="stat-value" id="totalQualified">{{ total_qualified or 0 }}</div>
             </div>
+            <div class="stat-card">
+                <div class="stat-label">Until Next Drawing</div>
+                <div class="stat-value" id="countdown" style="font-size: 28px;">00:00:00</div>
+                <div style="font-size: 11px; color: #666; margin-top: 4px;">Next: 00:05 EST</div>
+            </div>
         </div>
         
         <div class="main-grid">
@@ -782,13 +787,6 @@
                     </div>
                 </div>
                 {% endif %}
-                
-                <!-- Countdown -->
-                <div class="countdown-card">
-                    <div class="countdown-time" id="countdown">00:00:00</div>
-                    <div class="countdown-label">Until Next Drawing</div>
-                    <div style="font-size: 11px; color: #666; margin-top: 8px;">Next: 00:05 EST</div>
-                </div>
                 
                 <!-- Arcade Button -->
                 <button class="arcade-button" onclick="showRngTerminal(); showWinnerProcess();" style="margin-top: 20px;">
