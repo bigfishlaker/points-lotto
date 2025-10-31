@@ -906,8 +906,10 @@
                 });
         }
         
-        // Countdown timer
-        const nextReset = new Date('{{ next_reset }}');
+        // Countdown timer - handles timezone correctly
+        const nextResetISO = '{{ next_reset }}';
+        const nextReset = new Date(nextResetISO);
+        
         function updateCountdown() {
             const now = new Date();
             const diff = nextReset - now;
@@ -925,6 +927,12 @@
             document.getElementById('countdown').textContent = 
                 `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
         }
+        
+        // Debug: Log timezone info (remove in production if needed)
+        console.log('Next reset time:', nextResetISO);
+        console.log('Parsed date:', nextReset);
+        console.log('Current time:', new Date());
+        console.log('Time difference (ms):', nextReset - new Date());
         
         // RNG Terminal functions
         /**
