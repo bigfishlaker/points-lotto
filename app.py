@@ -241,12 +241,14 @@ def index():
             traceback.print_exc()
             all_winners = []
         
-        return render_template('index.html',
-                             qualified_users=qualified,
-                             total_qualified=len(qualified),
-                             next_reset=next_midnight.isoformat(),
-                             current_winner=current_winner,
-                             all_winners=all_winners)
+        return render_template(
+            'index.html',
+            qualified_users=qualified,
+            total_qualified=len(qualified),
+            next_reset=next_midnight.isoformat(),
+            current_winner=current_winner,
+            all_winners=all_winners
+        )
     except Exception as e:
         return f"Error: {str(e)}", 500
 
