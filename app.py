@@ -147,9 +147,12 @@ def index():
         
         # Calculate next midnight EST (00:05)
         now_est = get_est_now()
-        # Calculate next 00:05 EST - if it's already past 00:05 today, get today's, otherwise tomorrow's
-        next_midnight = now_est.replace(hour=0, minute=5, second=0, microsecond=0)
-        if now_est.hour > 0 or (now_est.hour == 0 and now_est.minute >= 5):
+        # Calculate next 00:05 EST
+        # If it's before 00:05 today, next is today. Otherwise tomorrow.
+        if now_est.hour == 0 and now_est.minute < 5:
+            # Before 00:05 today, so next is today at 00:05
+            next_midnight = now_est.replace(hour=0, minute=5, second=0, microsecond=0)
+        else:
             # Already past 00:05 today, so next is tomorrow
             next_midnight = (now_est + timedelta(days=1)).replace(hour=0, minute=5, second=0, microsecond=0)
         

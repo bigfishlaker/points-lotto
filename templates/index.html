@@ -889,6 +889,56 @@
                         document.getElementById('winnersTrack').innerHTML = items + items;
                         document.getElementById('winnersTicker').style.display = 'block';
                     }
+                })
+                .catch(err => console.error('Error loading ticker:', err));
+        }
+        
+        // Load winners leaderboard in the card
+        function loadWinnersLeaderboard() {
+            fetch('/api/all_winners')
+                .then(r => r.json())
+                .then(data => {
+                    const container = document.getElementById('winnersLeaderboard');
+                    if (!container) {
+                        console.error('Winners leaderboard container not found');
+                        return;
+                    }
+                    
+                    if (data.success && data.winners && data.winners.length > 0) {
+                        // Sort chronologically by selected_at or drawing_date
+                        const sorted = [...data.winners].sort((a, b) => {
+                            const dateA = a.selected_at ? new Date(a.selected_at) : (a.drawing_date ? new Date(a.drawing_date) : new Date(0));
+                            const dateB = b.selected_at ? new Date(b.selected_at) : (b.drawing_date ? new Date(b.drawing_date) : new Date(0));
+                            return dateA - dateB;
+                        });
+                        
+                        container.innerHTML = sorted.map((w, idx) => {
+                            const date = w.selected_at ? new Date(w.selected_at).toLocaleDateString() : (w.drawing_date || 'N/A');
+                            return `
+                                <div style="display: flex; align-items: center; padding: 8px 0; border-bottom: 1px solid #222;">
+                                    <div style="width: 24px; font-size: 11px; color: #666; margin-right: 8px;">${idx + 1}</div>
+                                    <img src="https://unavatar.io/twitter/${w.username}" 
+                                         alt="${w.username}" 
+                                         style="width: 24px; height: 24px; border-radius: 50%; margin-right: 8px; border: 1px solid #333;"
+                                         onerror="this.src='https://abs.twimg.com/sticky/default_profile_images/default_profile_normal.png';">
+                                    <div style="flex: 1;">
+                                        <div style="font-size: 12px; color: #fff; font-weight: 500;">@${w.username}</div>
+                                        <div style="font-size: 10px; color: #666;">${date}</div>
+                                    </div>
+                                    <div style="font-size: 12px; color: #4CAF50; font-weight: 600;">${w.points || 0} pts</div>
+                                </div>
+                            `;
+                        }).join('');
+                    } else {
+                        container.innerHTML = '<div style="text-align: center; color: #666; padding: 20px; font-size: 12px;">No winners yet</div>';
+                    }
+                })
+                .catch(err => {
+                    console.error('Error loading winners leaderboard:', err);
+                    const container = document.getElementById('winnersLeaderboard');
+                    if (container) {
+                        container.innerHTML = '<div style="text-align: center; color: #666; padding: 20px; font-size: 12px;">Error loading winners</div>';
+                    }
                 });
         }
         
