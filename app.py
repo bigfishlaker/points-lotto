@@ -252,6 +252,7 @@ def index():
     except Exception as e:
         return f"Error: {str(e)}", 500
 
+
 @app.route('/api/current_winner')
 def api_current_winner():
     """Get current winner with RNG details"""
