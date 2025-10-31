@@ -628,7 +628,11 @@
     <div class="header">
         <div class="header-content">
             <div class="logo">💵 Points Lotto</div>
-            <div style="font-size: 14px; color: #888;">Daily Winner Selection</div>
+            <button onclick="viewWinner()" 
+                    style="background: #4CAF50; border: none; padding: 8px 16px; 
+                           color: #fff; font-size: 14px; border-radius: 4px; cursor: pointer; font-weight: 600;">
+                View Winner
+            </button>
         </div>
     </div>
     
@@ -643,12 +647,6 @@
             <div class="stat-card">
                 <div class="stat-label">Qualified Users</div>
                 <div class="stat-value" id="totalQualified">{{ total_qualified or 0 }}</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-label">Today's Winner</div>
-                <div class="stat-value" id="winnerName" style="font-size: 20px;">
-                    {% if current_winner %}@{{ current_winner.username }}{% else %}--{% endif %}
-                </div>
             </div>
         </div>
         
@@ -880,12 +878,15 @@
         }
         
         // RNG Terminal functions
+        function viewWinner() {
+            showRngTerminal();
+            loadCurrentWinnerDisplay();
+        }
+        
         function showRngTerminal() {
             const modal = document.getElementById('rngTerminalModal');
             if (modal) {
                 modal.classList.add('active');
-                // Load current winner display when opening
-                loadCurrentWinnerDisplay();
             }
         }
         
