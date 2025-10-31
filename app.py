@@ -30,10 +30,10 @@ _winner_selection_lock = threading.Lock()
 
 def get_est_now():
     """Get current time in EST/EDT"""
-    est = timezone(timedelta(hours=-5))
-    edt = timezone(timedelta(hours=-4))
-    now_utc = datetime.now(timezone.utc)
-    is_dst = now_utc.month >= 3 and now_utc.month < 11
+        est = timezone(timedelta(hours=-5))
+        edt = timezone(timedelta(hours=-4))
+        now_utc = datetime.now(timezone.utc)
+        is_dst = now_utc.month >= 3 and now_utc.month < 11
     return now_utc.astimezone(edt if is_dst else est)
 
 def select_winner():
@@ -166,11 +166,11 @@ def api_current_winner():
     winner = db.get_current_winner()
     if winner:
         return jsonify({
-                'success': True,
-                'winner': winner,
+            'success': True,
+            'winner': winner,
             'total_eligible': winner.get('total_eligible'),
-                'random_seed': winner.get('random_seed'),
-                'selection_hash': winner.get('selection_hash')
+            'random_seed': winner.get('random_seed'),
+            'selection_hash': winner.get('selection_hash')
         })
     return jsonify({'success': False, 'winner': None})
 
@@ -229,7 +229,7 @@ def api_check_qualification():
                 print(f"Error fetching transactions for {username}: {e}")
             
             # Return detailed stats from PointsMarket
-        return jsonify({
+            return jsonify({
                 'success': True,
                 'username': user['username'],
                 'total_points': points,
@@ -243,7 +243,7 @@ def api_check_qualification():
                 'message': f"@{user['username']} {'✅ QUALIFIED' if qualifies else '❌ NOT QUALIFIED'} ({points} points)"
             })
         else:
-        return jsonify({
+            return jsonify({
                 'success': False,
                 'username': username,
                 'qualifies': False,
@@ -258,7 +258,7 @@ def api_select_winner():
     with _winner_selection_lock:
         result = select_winner()
         if result:
-        return jsonify({'success': True, 'winner': result})
+            return jsonify({'success': True, 'winner': result})
         return jsonify({'success': False, 'error': 'Failed or already exists'}), 400
 
 # Start scheduler
