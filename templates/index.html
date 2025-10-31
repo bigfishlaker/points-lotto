@@ -263,6 +263,124 @@
             font-size: 13px;
             color: #888;
         }
+        
+        /* RNG Terminal Modal */
+        .rng-terminal-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            z-index: 9999;
+            backdrop-filter: blur(4px);
+        }
+        
+        .rng-terminal-modal.active {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .rng-terminal-content {
+            background: #111;
+            border: 1px solid #333;
+            border-radius: 8px;
+            width: 90%;
+            max-width: 800px;
+            max-height: 80vh;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+        }
+        
+        .rng-terminal-header {
+            padding: 16px 20px;
+            border-bottom: 1px solid #222;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .rng-terminal-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: #fff;
+        }
+        
+        .rng-terminal-close {
+            background: none;
+            border: none;
+            color: #888;
+            font-size: 24px;
+            cursor: pointer;
+            padding: 0;
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .rng-terminal-close:hover {
+            color: #fff;
+        }
+        
+        .rng-terminal-body {
+            padding: 20px;
+            flex: 1;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .rng-terminal-output {
+            background: #0a0a0a;
+            border: 1px solid #222;
+            padding: 16px;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            color: #ccc;
+            flex: 1;
+            overflow-y: auto;
+            max-height: 400px;
+        }
+        
+        .rng-terminal-line {
+            margin-bottom: 4px;
+            line-height: 1.6;
+        }
+        
+        .rng-terminal-line.info { color: #4CAF50; }
+        .rng-terminal-line.success { color: #4CAF50; font-weight: 600; }
+        .rng-terminal-line.data { color: #888; }
+        .rng-terminal-line.result { color: #FFD700; font-weight: 600; }
+        .rng-terminal-line.error { color: #f44336; }
+        
+        .rng-terminal-prompt {
+            margin-top: 12px;
+            padding: 8px;
+            background: #0a0a0a;
+            border-top: 1px solid #222;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            color: #4CAF50;
+        }
+        
+        .rng-prompt {
+            color: #4CAF50;
+        }
+        
+        .rng-cursor {
+            animation: blink 1s infinite;
+            color: #4CAF50;
+        }
+        
+        @keyframes blink {
+            0%, 50% { opacity: 1; }
+            51%, 100% { opacity: 0; }
+        }
     </style>
 </head>
 <body>
@@ -352,6 +470,25 @@
         </div>
     </div>
     
+    <!-- RNG Terminal Modal -->
+    <div id="rngTerminalModal" class="rng-terminal-modal">
+        <div class="rng-terminal-content">
+            <div class="rng-terminal-header">
+                <div class="rng-terminal-title">🎲 RANDOM SELECTION PROCESS</div>
+                <button class="rng-terminal-close" onclick="closeRngTerminal()">✕</button>
+            </div>
+            <div class="rng-terminal-body">
+                <div id="rngTerminalOutput" class="rng-terminal-output">
+                    <div class="rng-terminal-line info">$ Initializing random number generator...</div>
+                </div>
+                <div class="rng-terminal-prompt">
+                    <span class="rng-prompt">points-lotto@selection:</span>
+                    <span class="rng-cursor">█</span>
+                </div>
+            </div>
+        </div>
+    </div>
+    
     <script>
         // Load winners ticker
         function loadTicker() {
@@ -392,6 +529,105 @@
             document.getElementById('countdown').textContent = 
                 `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
         }
+        
+        // RNG Terminal functions
+        function showRngTerminal() {
+            const modal = document.getElementById('rngTerminalModal');
+            if (modal) {
+                modal.classList.add('active');
+            }
+        }
+        
+        function closeRngTerminal() {
+            const modal = document.getElementById('rngTerminalModal');
+            if (modal) {
+                modal.classList.remove('active');
+            }
+        }
+        
+        function addTerminalLine(text, className = 'info') {
+            const output = document.getElementById('rngTerminalOutput');
+            if (output) {
+                const line = document.createElement('div');
+                line.className = 'rng-terminal-line ' + className;
+                line.textContent = text;
+                output.appendChild(line);
+                output.scrollTop = output.scrollHeight;
+            }
+        }
+        
+        function showWinnerProcess() {
+            showRngTerminal();
+            const output = document.getElementById('rngTerminalOutput');
+            if (output) output.innerHTML = '<div class="rng-terminal-line info">$ Loading winner selection details...</div>';
+            
+            fetch('/api/current_winner')
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success && data.winner) {
+                        setTimeout(() => {
+                            addTerminalLine('$ Winner Selection Process', 'success');
+                            addTerminalLine(`$ Drawing Date: ${data.winner.drawing_date || 'N/A'}`, 'info');
+                            addTerminalLine('');
+                            addTerminalLine('$ Step 1: Fetching fresh leaderboard data...', 'info');
+                            setTimeout(() => addTerminalLine('  ✅ Data fetched from PointsMarket.io', 'success'), 500);
+                            setTimeout(() => {
+                                addTerminalLine('');
+                                addTerminalLine('$ Step 2: Filtering qualified users...', 'info');
+                                if (data.total_eligible) {
+                                    addTerminalLine(`  ✅ Found ${data.total_eligible} qualified users`, 'data');
+                                    addTerminalLine('  (All users with ≥1 total point)', 'data');
+                                }
+                            }, 1000);
+                            setTimeout(() => {
+                                addTerminalLine('');
+                                addTerminalLine('$ Step 3: Generating random seed...', 'info');
+                                if (data.random_seed) {
+                                    addTerminalLine(`  Seed: ${data.random_seed}`, 'data');
+                                    addTerminalLine('  Method: SHA256 hash of (date + timestamp + count)', 'data');
+                                }
+                            }, 1500);
+                            setTimeout(() => {
+                                addTerminalLine('');
+                                addTerminalLine('$ Step 4: Applying seed to RNG...', 'info');
+                                setTimeout(() => addTerminalLine('  ✅ RNG seeded and ready', 'success'), 400);
+                            }, 2000);
+                            setTimeout(() => {
+                                addTerminalLine('');
+                                addTerminalLine('$ Step 5: Random selection...', 'info');
+                                setTimeout(() => addTerminalLine('  ✅ Selection complete!', 'success'), 600);
+                            }, 2500);
+                            setTimeout(() => {
+                                addTerminalLine('');
+                                addTerminalLine('', 'result');
+                                addTerminalLine('🏆 WINNER SELECTED:', 'result');
+                                addTerminalLine(`   Username: @${data.winner.username}`, 'result');
+                                addTerminalLine(`   Points: ${data.winner.points}`, 'result');
+                                if (data.total_eligible) addTerminalLine(`   Selected from: ${data.total_eligible} eligible users`, 'result');
+                                if (data.random_seed) addTerminalLine(`   Random Seed: ${data.random_seed}`, 'result');
+                                if (data.selection_hash) addTerminalLine(`   Verification Hash: ${data.selection_hash}`, 'result');
+                                if (data.winner.drawing_date) addTerminalLine(`   Drawing Date: ${data.winner.drawing_date}`, 'result');
+                            }, 3000);
+                        }, 300);
+                    }
+                });
+        }
+        
+        // Show terminal on page load if winner exists
+        {% if current_winner %}
+        setTimeout(showWinnerProcess, 1500);
+        {% endif %}
+        
+        // Make winner card clickable to show terminal
+        {% if current_winner %}
+        document.addEventListener('DOMContentLoaded', () => {
+            const winnerCard = document.querySelector('.winner-card');
+            if (winnerCard) {
+                winnerCard.style.cursor = 'pointer';
+                winnerCard.addEventListener('click', showWinnerProcess);
+            }
+        });
+        {% endif %}
         
         // Initialize
         loadTicker();
