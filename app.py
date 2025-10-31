@@ -254,13 +254,13 @@ def index():
 def api_current_winner():
     """Get current winner with RNG details"""
     winner = db.get_current_daily_winner()
-        if winner:
-            return jsonify({
-                'success': True,
-                'winner': winner,
+    if winner:
+        return jsonify({
+            'success': True,
+            'winner': winner,
             'total_eligible': winner.get('total_eligible'),
-                'random_seed': winner.get('random_seed'),
-                'selection_hash': winner.get('selection_hash')
+            'random_seed': winner.get('random_seed'),
+            'selection_hash': winner.get('selection_hash')
         })
     return jsonify({'success': False, 'winner': None})
 
