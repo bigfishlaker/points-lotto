@@ -5,7 +5,7 @@ import time
 import random
 import hashlib
 import os
-from database_clean import DatabaseManager as DatabaseManager
+from database_clean import DatabaseManager
 
 # PointsMarket integration
 try:
@@ -50,17 +50,17 @@ def select_winner():
         if existing:
             return existing
         
-        print(f"📊 Fetching leaderboard for {today_str}...")
+        print(f"Fetching leaderboard for {today_str}...")
         users = points_scraper.get_leaderboard(limit=None)
         
         # Baseline: all users with 1+ point qualify
         qualified = [u for u in users if u.get('total_points', 0) >= 1]
         
         if not qualified:
-            print("❌ No eligible users")
+            print("No eligible users")
             return None
         
-        print(f"✅ {len(qualified)} qualified users")
+        print(f"{len(qualified)} qualified users")
         
         # Select winner
         seed_string = f"{today_str}{datetime.now().isoformat()}{len(qualified)}"
@@ -84,7 +84,7 @@ def select_winner():
         )
         
         if success:
-            print(f"🏆 Winner: @{winner['username']} ({winner['total_points']} pts)")
+            print(f"Winner: @{winner['username']} ({winner['total_points']} pts)")
             return {
                 'username': winner['username'],
                 'points': winner['total_points'],
@@ -93,15 +93,15 @@ def select_winner():
                 'random_seed': random_seed,
                 'selection_hash': selection_hash
             }
-            return None
+        return None
     except Exception as e:
-        print(f"❌ Error selecting winner: {e}")
+        print(f"Error selecting winner: {e}")
         return None
 
 def daily_scheduler():
     """Scheduler runs at 00:05 EST daily"""
     global _scheduler_running
-    print("🕐 Scheduler started - will select winner at 00:05 EST daily")
+    print("Scheduler started - will select winner at 00:05 EST daily")
     
     last_processed_date = None
     
@@ -117,7 +117,7 @@ def daily_scheduler():
                     with _winner_selection_lock:
                         existing = db.get_winner_for_date(today_str)
                         if not existing:
-                            print(f"⏰ Selecting winner for {today_str}...")
+                            print(f"Selecting winner for {today_str}...")
                             time.sleep(300)  # Wait 5 min for PointsMarket update
                             select_winner()
                         last_processed_date = today_str
@@ -126,7 +126,7 @@ def daily_scheduler():
             
             time.sleep(60)
         except Exception as e:
-            print(f"❌ Scheduler error: {e}")
+            print(f"Scheduler error: {e}")
             time.sleep(60)
 
 @app.route('/')
@@ -153,7 +153,7 @@ def index():
         current_winner = db.get_current_winner()
         
         return render_template('index.html',
-                             qualified_users=qualified,  # ALL users
+                             qualified_users=qualified,
                              total_qualified=len(qualified),
                              next_reset=next_midnight.isoformat(),
                              current_winner=current_winner)
@@ -164,14 +164,14 @@ def index():
 def api_current_winner():
     """Get current winner with RNG details"""
     winner = db.get_current_winner()
-        if winner:
-            return jsonify({
-                'success': True,
-                'winner': winner,
+    if winner:
+        return jsonify({
+            'success': True,
+            'winner': winner,
             'total_eligible': winner.get('total_eligible'),
-                'random_seed': winner.get('random_seed'),
-                'selection_hash': winner.get('selection_hash')
-            })
+            'random_seed': winner.get('random_seed'),
+            'selection_hash': winner.get('selection_hash')
+        })
     return jsonify({'success': False, 'winner': None})
 
 @app.route('/api/all_winners')
@@ -209,3 +209,4 @@ if POINTSMARKET_ENABLED:
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)
+
