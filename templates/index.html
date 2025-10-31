@@ -721,7 +721,7 @@
                                                    color: #fff; font-size: 14px; border-radius: 4px; cursor: pointer; font-weight: 600;">
                                         View More Users ({{ qualified_users|length - 100 }} remaining)
                                     </button>
-                                    <div id="hiddenUsers" style="display: none;">
+                                    <template id="hiddenUsersTemplate">
                                         {% for user in qualified_users[100:] %}
                                         <tr data-username="{{ user.username|lower }}" 
                                             onclick="selectUser('{{ user.username }}')"
@@ -752,7 +752,7 @@
                                             </td>
                                         </tr>
                                         {% endfor %}
-                                    </div>
+                                    </template>
                                 </td>
                             </tr>
                         </tfoot>
@@ -1082,17 +1082,17 @@
         }
         
         function loadMoreUsers() {
-            const hiddenUsers = document.getElementById('hiddenUsers');
+            const hiddenUsersTemplate = document.getElementById('hiddenUsersTemplate');
             const loadMoreBtn = document.getElementById('loadMoreBtn');
             const tbody = document.getElementById('leaderboardBody');
+            const tfoot = loadMoreBtn ? loadMoreBtn.closest('tfoot') : null;
             
-            if (hiddenUsers && tbody) {
-                const rows = hiddenUsers.querySelectorAll('tr');
+            if (hiddenUsersTemplate && tbody) {
+                const rows = hiddenUsersTemplate.content.querySelectorAll('tr');
                 rows.forEach(row => {
                     tbody.appendChild(row.cloneNode(true));
                 });
-                hiddenUsers.style.display = 'none';
-                if (loadMoreBtn) loadMoreBtn.style.display = 'none';
+                if (tfoot) tfoot.style.display = 'none';
             }
         }
         
