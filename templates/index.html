@@ -658,18 +658,15 @@
                 <div class="card-header">
                     <div class="card-title">Leaderboard</div>
                     <div style="flex: 1; margin-left: 20px; display: flex; gap: 10px; align-items: center;">
-                        <input type="text" id="searchInput" placeholder="Search username..." 
+                        <input type="text" id="searchInput" placeholder="Search username (Enter to check qualification)..." 
                                style="background: #0a0a0a; border: 1px solid #222; padding: 8px 12px; 
-                                      color: #fff; font-size: 13px; width: 250px; border-radius: 4px;"
-                               oninput="filterUsers()">
-                        <input type="text" id="checkQualInput" placeholder="Check qualification..." 
-                               style="background: #0a0a0a; border: 1px solid #222; padding: 8px 12px; 
-                                      color: #fff; font-size: 13px; width: 200px; border-radius: 4px;"
+                                      color: #fff; font-size: 13px; width: 350px; border-radius: 4px;"
+                               oninput="filterUsers()"
                                onkeypress="if(event.key==='Enter') checkQualification()">
                         <button onclick="checkQualification()" 
                                 style="background: #4CAF50; border: none; padding: 8px 16px; 
                                        color: #fff; font-size: 13px; border-radius: 4px; cursor: pointer; font-weight: 600;">
-                            Check
+                            Check Qualification
                         </button>
                     </div>
                 </div>
@@ -684,8 +681,12 @@
                             </tr>
                         </thead>
                         <tbody id="leaderboardBody">
-                            {% for user in qualified_users %}
-                            <tr data-username="{{ user.username|lower }}">
+                            {% for user in qualified_users[:100] %}
+                            <tr data-username="{{ user.username|lower }}" 
+                                onclick="selectUser('{{ user.username }}')"
+                                style="cursor: pointer; transition: background 0.2s;"
+                                onmouseover="this.style.background='#0f0f0f'" 
+                                onmouseout="this.style.background='transparent'">
                                 <td class="rank">{{ user.rank }}</td>
                                 <td class="username">
                                     <div style="display: flex; align-items: center; gap: 10px;">
@@ -694,6 +695,7 @@
                                              style="width: 32px; height: 32px; border-radius: 50%; border: 2px solid #222; object-fit: cover;"
                                              onerror="this.src='https://abs.twimg.com/sticky/default_profile_images/default_profile_normal.png';">
                                         <a href="https://twitter.com/{{ user.username }}" target="_blank" 
+                                           onclick="event.stopPropagation();"
                                            style="color: #4CAF50; text-decoration: none;">
                                             @{{ user.username }}
                                         </a>
@@ -710,6 +712,51 @@
                             </tr>
                             {% endfor %}
                         </tbody>
+                        {% if qualified_users|length > 100 %}
+                        <tfoot>
+                            <tr>
+                                <td colspan="4" style="text-align: center; padding: 20px;">
+                                    <button id="loadMoreBtn" onclick="loadMoreUsers()" 
+                                            style="background: #4CAF50; border: none; padding: 10px 20px; 
+                                                   color: #fff; font-size: 14px; border-radius: 4px; cursor: pointer; font-weight: 600;">
+                                        View More Users ({{ qualified_users|length - 100 }} remaining)
+                                    </button>
+                                    <div id="hiddenUsers" style="display: none;">
+                                        {% for user in qualified_users[100:] %}
+                                        <tr data-username="{{ user.username|lower }}" 
+                                            onclick="selectUser('{{ user.username }}')"
+                                            style="cursor: pointer; transition: background 0.2s;"
+                                            onmouseover="this.style.background='#0f0f0f'" 
+                                            onmouseout="this.style.background='transparent'">
+                                            <td class="rank">{{ user.rank }}</td>
+                                            <td class="username">
+                                                <div style="display: flex; align-items: center; gap: 10px;">
+                                                    <img src="https://unavatar.io/twitter/{{ user.username }}" 
+                                                         alt="{{ user.username }}" 
+                                                         style="width: 32px; height: 32px; border-radius: 50%; border: 2px solid #222; object-fit: cover;"
+                                                         onerror="this.src='https://abs.twimg.com/sticky/default_profile_images/default_profile_normal.png';">
+                                                    <a href="https://twitter.com/{{ user.username }}" target="_blank" 
+                                                       onclick="event.stopPropagation();"
+                                                       style="color: #4CAF50; text-decoration: none;">
+                                                        @{{ user.username }}
+                                                    </a>
+                                                </div>
+                                            </td>
+                                            <td class="points" style="text-align: right;">{{ user.total_points }}</td>
+                                            <td style="text-align: center;">
+                                                {% if user.total_points >= 1 %}
+                                                <span style="color: #4CAF50; font-size: 18px; font-weight: bold;" title="Qualified (1+ points)">✓</span>
+                                                {% else %}
+                                                <span style="color: #666;">-</span>
+                                                {% endif %}
+                                            </td>
+                                        </tr>
+                                        {% endfor %}
+                                    </div>
+                                </td>
+                            </tr>
+                        </tfoot>
+                        {% endif %}
                     </table>
                 </div>
             </div>
@@ -920,64 +967,78 @@
         function showWinnerProcess() {
             showRngTerminal();
             const output = document.getElementById('rngTerminalOutput');
-            if (output) output.innerHTML = '<div class="rng-terminal-line info">$ Loading winner selection details...</div>';
+            if (output) {
+                output.innerHTML = '';
+                addTerminalLine('$ Initializing winner selection process...', 'info', 40);
+            }
             
             fetch('/api/current_winner')
                 .then(r => r.json())
                 .then(data => {
                     if (data.success && data.winner) {
                         setTimeout(() => {
-                            addTerminalLine('$ Winner Selection Process', 'success');
-                            addTerminalLine(`$ Drawing Date: ${data.winner.drawing_date || 'N/A'}`, 'info');
-                            addTerminalLine('');
-                            addTerminalLine('$ Step 1: Fetching fresh leaderboard data...', 'info');
-                            setTimeout(() => addTerminalLine('  ✅ Data fetched from PointsMarket.io', 'success'), 500);
+                            addTerminalLine('$ Winner Selection Process', 'success', 35);
+                            addTerminalLine(`$ Drawing Date: ${data.winner.drawing_date || 'N/A'}`, 'info', 30);
+                            addTerminalLine('', 'info', 0);
                             setTimeout(() => {
-                                addTerminalLine('');
-                                addTerminalLine('$ Step 2: Filtering qualified users...', 'info');
-                                if (data.total_eligible) {
-                                    addTerminalLine(`  ✅ Found ${data.total_eligible} qualified users`, 'data');
-                                    addTerminalLine('  (All users with ≥1 total point)', 'data');
-                                }
+                                addTerminalLine('$ Step 1: Fetching fresh leaderboard data...', 'info', 40);
+                                setTimeout(() => addTerminalLine('  ✅ Data fetched from PointsMarket.io', 'success', 25), 800);
+                                setTimeout(() => {
+                                    addTerminalLine('');
+                                    addTerminalLine('$ Step 2: Filtering qualified users...', 'info', 40);
+                                    if (data.total_eligible) {
+                                        setTimeout(() => addTerminalLine(`  ✅ Found ${data.total_eligible} qualified users`, 'data', 30), 600);
+                                        setTimeout(() => addTerminalLine('  (All users with ≥1 total point)', 'data', 30), 900);
+                                    }
+                                }, 1800);
+                                setTimeout(() => {
+                                    addTerminalLine('');
+                                    addTerminalLine('$ Step 3: Generating random seed...', 'info', 40);
+                                    if (data.random_seed) {
+                                        setTimeout(() => addTerminalLine(`  Seed: ${data.random_seed}`, 'data', 30), 600);
+                                        setTimeout(() => addTerminalLine('  Method: SHA256 hash of (date + timestamp + count)', 'data', 25), 1000);
+                                    }
+                                }, 3200);
+                                setTimeout(() => {
+                                    addTerminalLine('');
+                                    addTerminalLine('$ Step 4: Applying seed to RNG...', 'info', 40);
+                                    setTimeout(() => addTerminalLine('  ✅ RNG seeded and ready', 'success', 30), 700);
+                                }, 4800);
+                                setTimeout(() => {
+                                    addTerminalLine('');
+                                    addTerminalLine('$ Step 5: Random selection...', 'info', 40);
+                                    setTimeout(() => addTerminalLine('  ⏳ Processing...', 'info', 50), 500);
+                                    setTimeout(() => addTerminalLine('  ✅ Selection complete!', 'success', 30), 1200);
+                                }, 6200);
+                                setTimeout(() => {
+                                    addTerminalLine('');
+                                    addTerminalLine('', 'result', 0);
+                                    addTerminalLine('🏆 WINNER SELECTED:', 'result', 50);
+                                    setTimeout(() => addTerminalLine(`   Username: @${data.winner.username}`, 'result', 40), 400);
+                                    setTimeout(() => addTerminalLine(`   Points: ${data.winner.points}`, 'result', 40), 800);
+                                    if (data.total_eligible) {
+                                        setTimeout(() => addTerminalLine(`   Selected from: ${data.total_eligible} eligible users`, 'result', 35), 1200);
+                                    }
+                                    if (data.random_seed) {
+                                        setTimeout(() => addTerminalLine(`   Random Seed: ${data.random_seed}`, 'result', 35), 1600);
+                                    }
+                                    if (data.selection_hash) {
+                                        setTimeout(() => addTerminalLine(`   Selection Hash: ${data.selection_hash}`, 'result', 35), 2000);
+                                    }
+                                }, 8000);
                             }, 1000);
-                            setTimeout(() => {
-                                addTerminalLine('');
-                                addTerminalLine('$ Step 3: Generating random seed...', 'info');
-                                if (data.random_seed) {
-                                    addTerminalLine(`  Seed: ${data.random_seed}`, 'data');
-                                    addTerminalLine('  Method: SHA256 hash of (date + timestamp + count)', 'data');
-                                }
-                            }, 1500);
-                            setTimeout(() => {
-                                addTerminalLine('');
-                                addTerminalLine('$ Step 4: Applying seed to RNG...', 'info');
-                                setTimeout(() => addTerminalLine('  ✅ RNG seeded and ready', 'success'), 400);
-                            }, 2000);
-                            setTimeout(() => {
-                                addTerminalLine('');
-                                addTerminalLine('$ Step 5: Random selection...', 'info');
-                                setTimeout(() => addTerminalLine('  ✅ Selection complete!', 'success'), 600);
-                            }, 2500);
-                            setTimeout(() => {
-                                addTerminalLine('');
-                                addTerminalLine('', 'result');
-                                addTerminalLine('🏆 WINNER SELECTED:', 'result');
-                                addTerminalLine(`   Username: @${data.winner.username}`, 'result');
-                                addTerminalLine(`   Points: ${data.winner.points}`, 'result');
-                                if (data.total_eligible) addTerminalLine(`   Selected from: ${data.total_eligible} eligible users`, 'result');
-                                if (data.random_seed) addTerminalLine(`   Random Seed: ${data.random_seed}`, 'result');
-                                if (data.selection_hash) addTerminalLine(`   Verification Hash: ${data.selection_hash}`, 'result');
-                                if (data.winner.drawing_date) addTerminalLine(`   Drawing Date: ${data.winner.drawing_date}`, 'result');
-                            }, 3000);
-                        }, 300);
+                        }, 500);
+                    } else {
+                        setTimeout(() => {
+                            addTerminalLine('$ No winner available', 'error', 40);
+                            addTerminalLine('$ Next drawing: 00:05 EST', 'info', 40);
+                        }, 1000);
                     }
                 });
         }
         
-        // Show terminal on page load if winner exists
-        {% if current_winner %}
-        setTimeout(showWinnerProcess, 1500);
-        {% endif %}
+        // Load current winner display on page load (don't auto-open modal)
+        // The terminal will show today's winner when opened
         
         // Make winner card clickable to show terminal
         {% if current_winner %}
@@ -1012,8 +1073,31 @@
         
         // Initialize
         // Qualification checker with detailed stats modal
+        function selectUser(username) {
+            const searchInput = document.getElementById('searchInput');
+            if (searchInput) {
+                searchInput.value = username.replace('@', '');
+                filterUsers();
+            }
+        }
+        
+        function loadMoreUsers() {
+            const hiddenUsers = document.getElementById('hiddenUsers');
+            const loadMoreBtn = document.getElementById('loadMoreBtn');
+            const tbody = document.getElementById('leaderboardBody');
+            
+            if (hiddenUsers && tbody) {
+                const rows = hiddenUsers.querySelectorAll('tr');
+                rows.forEach(row => {
+                    tbody.appendChild(row.cloneNode(true));
+                });
+                hiddenUsers.style.display = 'none';
+                if (loadMoreBtn) loadMoreBtn.style.display = 'none';
+            }
+        }
+        
         function checkQualification() {
-            const input = document.getElementById('checkQualInput');
+            const input = document.getElementById('searchInput');
             const username = input.value.trim().replace('@', '');
             
             if (!username) {
@@ -1129,7 +1213,6 @@
         
         function closeQualStats() {
             document.getElementById('qualStatsModal').classList.remove('active');
-            document.getElementById('checkQualInput').value = '';
         }
         
         // Close modal on outside click
