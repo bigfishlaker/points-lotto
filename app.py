@@ -164,14 +164,23 @@ def index():
             all_winners = db.get_all_winners()
             if all_winners is None:
                 all_winners = []
+            
             # Sort by selected_at if available, otherwise drawing_date
             if all_winners:
-                all_winners = sorted(all_winners, key=lambda w: w.get('selected_at') or w.get('drawing_date') or '0000-00-00')
+                def sort_key(w):
+                    selected = w.get('selected_at') or ''
+                    drawing = w.get('drawing_date') or ''
+                    return selected if selected else drawing
+                all_winners = sorted(all_winners, key=sort_key)
+            
             print(f"Rendering page with {len(all_winners)} winners")
             if all_winners:
-                print(f"  Sample winner: {all_winners[0]}")
+                print(f"  First winner: @{all_winners[0].get('username', 'unknown')} - {all_winners[0].get('drawing_date', 'N/A')}")
+                print(f"  All winner usernames: {[w.get('username') for w in all_winners]}")
         except Exception as e:
             print(f"Error getting winners: {e}")
+            import traceback
+            traceback.print_exc()
             all_winners = []
         
         return render_template('index.html',

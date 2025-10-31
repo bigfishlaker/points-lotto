@@ -492,20 +492,29 @@ class DatabaseManager:
         """Get all winners ordered chronologically by selected_at"""
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
-        cursor.execute('''
-            SELECT winner_username, winner_points, drawing_date, selected_at, total_eligible, random_seed, selection_hash
-            FROM daily_winners
-            ORDER BY selected_at ASC
-        ''')
-        results = cursor.fetchall()
-        conn.close()
-        return [{
-            'username': result[0],
-            'points': result[1],
-            'drawing_date': result[2],
-            'selected_at': result[3],
-            'total_eligible': result[4],
-            'random_seed': result[5],
-            'selection_hash': result[6]
-        } for result in results]
+        try:
+            cursor.execute('''
+                SELECT winner_username, winner_points, drawing_date, selected_at, total_eligible, random_seed, selection_hash
+                FROM daily_winners
+                ORDER BY COALESCE(selected_at, drawing_date) ASC
+            ''')
+            results = cursor.fetchall()
+            conn.close()
+            winners = []
+            for result in results:
+                winners.append({
+                    'username': result[0] if result[0] else '',
+                    'points': result[1] if result[1] else 0,
+                    'drawing_date': result[2] if result[2] else '',
+                    'selected_at': result[3] if result[3] else '',
+                    'total_eligible': result[4] if result[4] else None,
+                    'random_seed': result[5] if result[5] else None,
+                    'selection_hash': result[6] if result[6] else None
+                })
+            print(f"get_all_winners() returned {len(winners)} winners")
+            return winners
+        except Exception as e:
+            print(f"Error in get_all_winners(): {e}")
+            conn.close()
+            return []
 
