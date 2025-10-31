@@ -159,8 +159,13 @@ def index():
         # Get current winner
         current_winner = db.get_current_winner()
         
-        # Get all winners for the leaderboard
+        # Get all winners for the leaderboard - ensure we have a list
         all_winners = db.get_all_winners()
+        if all_winners is None:
+            all_winners = []
+        
+        # Debug: print winners count
+        print(f"Rendering page with {len(all_winners)} winners")
         
         return render_template('index.html',
                              qualified_users=qualified,

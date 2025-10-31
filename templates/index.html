@@ -828,23 +828,28 @@
                     <div style="font-size: 14px; font-weight: 600; color: #fff; margin-bottom: 12px;">Winners</div>
                     <div style="font-size: 11px; color: #888; margin-bottom: 12px;">Automatic Daily • Next: 00:05 EST</div>
                     <div id="winnersLeaderboard" style="max-height: 300px; overflow-y: auto;">
-                        {% if all_winners and all_winners|length > 0 %}
-                            {% for w in all_winners|sort(attribute='selected_at') %}
-                            <div style="display: flex; align-items: center; padding: 8px 0; border-bottom: 1px solid #222;">
-                                <div style="width: 24px; font-size: 11px; color: #666; margin-right: 8px;">{{ loop.index }}</div>
-                                <img src="https://unavatar.io/twitter/{{ w.username }}" 
-                                     alt="{{ w.username }}" 
-                                     style="width: 24px; height: 24px; border-radius: 50%; margin-right: 8px; border: 1px solid #333;"
-                                     onerror="this.src='https://abs.twimg.com/sticky/default_profile_images/default_profile_normal.png';">
-                                <div style="flex: 1;">
-                                    <div style="font-size: 12px; color: #fff; font-weight: 500;">@{{ w.username }}</div>
-                                    <div style="font-size: 10px; color: #666;">{{ w.drawing_date or 'N/A' }}</div>
+                        {% if all_winners %}
+                            {% set sorted_winners = all_winners|sort(attribute='selected_at', reverse=False) %}
+                            {% if sorted_winners|length > 0 %}
+                                {% for w in sorted_winners %}
+                                <div style="display: flex; align-items: center; padding: 8px 0; {% if not loop.last %}border-bottom: 1px solid #222;{% endif %}">
+                                    <div style="width: 30px; font-size: 12px; color: #666; margin-right: 10px; text-align: center;">{{ loop.index }}</div>
+                                    <img src="https://unavatar.io/twitter/{{ w.username }}" 
+                                         alt="{{ w.username }}" 
+                                         style="width: 28px; height: 28px; border-radius: 50%; margin-right: 10px; border: 2px solid #333; display: block;"
+                                         onerror="this.src='https://abs.twimg.com/sticky/default_profile_images/default_profile_normal.png';">
+                                    <div style="flex: 1; min-width: 0;">
+                                        <div style="font-size: 13px; color: #fff; font-weight: 600;">@{{ w.username }}</div>
+                                        <div style="font-size: 10px; color: #888; margin-top: 2px;">{{ w.drawing_date if w.drawing_date else 'N/A' }}</div>
+                                    </div>
+                                    <div style="font-size: 13px; color: #4CAF50; font-weight: 700; white-space: nowrap;">{{ w.points if w.points else 0 }} pts</div>
                                 </div>
-                                <div style="font-size: 12px; color: #4CAF50; font-weight: 600;">{{ w.points or 0 }} pts</div>
-                            </div>
-                            {% endfor %}
+                                {% endfor %}
+                            {% else %}
+                                <div style="text-align: center; color: #666; padding: 30px; font-size: 13px;">No winners yet</div>
+                            {% endif %}
                         {% else %}
-                            <div style="text-align: center; color: #666; padding: 20px; font-size: 12px;">No winners yet</div>
+                            <div style="text-align: center; color: #666; padding: 30px; font-size: 13px;">No winners yet</div>
                         {% endif %}
                     </div>
                 </div>
@@ -910,7 +915,7 @@
                 .catch(err => console.error('Error loading ticker:', err));
         }
         
-        // Load winners leaderboard in the card (refresh only - initial render is server-side)
+        // Load winners leaderboard - refreshes from API periodically
         function loadWinnersLeaderboard() {
             fetch('/api/all_winners')
                 .then(r => r.json())
@@ -919,36 +924,36 @@
                     if (!container) return;
                     
                     if (data.success && data.winners && data.winners.length > 0) {
-                        // Sort chronologically by selected_at or drawing_date
+                        // Sort chronologically
                         const sorted = [...data.winners].sort((a, b) => {
-                            const dateA = a.selected_at ? new Date(a.selected_at) : (a.drawing_date ? new Date(a.drawing_date) : new Date(0));
-                            const dateB = b.selected_at ? new Date(b.selected_at) : (b.drawing_date ? new Date(b.drawing_date) : new Date(0));
+                            const dateA = a.selected_at ? new Date(a.selected_at) : (a.drawing_date ? new Date(a.drawing_date + 'T00:00:00') : new Date(0));
+                            const dateB = b.selected_at ? new Date(b.selected_at) : (b.drawing_date ? new Date(b.drawing_date + 'T00:00:00') : new Date(0));
                             return dateA - dateB;
                         });
                         
                         container.innerHTML = sorted.map((w, idx) => {
-                            const date = w.selected_at ? new Date(w.selected_at).toLocaleDateString() : (w.drawing_date || 'N/A');
+                            const date = w.drawing_date || 'N/A';
                             return `
-                                <div style="display: flex; align-items: center; padding: 8px 0; border-bottom: 1px solid #222;">
-                                    <div style="width: 24px; font-size: 11px; color: #666; margin-right: 8px;">${idx + 1}</div>
+                                <div style="display: flex; align-items: center; padding: 8px 0; ${idx < sorted.length - 1 ? 'border-bottom: 1px solid #222;' : ''}">
+                                    <div style="width: 30px; font-size: 12px; color: #666; margin-right: 10px; text-align: center;">${idx + 1}</div>
                                     <img src="https://unavatar.io/twitter/${w.username}" 
                                          alt="${w.username}" 
-                                         style="width: 24px; height: 24px; border-radius: 50%; margin-right: 8px; border: 1px solid #333;"
+                                         style="width: 28px; height: 28px; border-radius: 50%; margin-right: 10px; border: 2px solid #333; display: block;"
                                          onerror="this.src='https://abs.twimg.com/sticky/default_profile_images/default_profile_normal.png';">
-                                    <div style="flex: 1;">
-                                        <div style="font-size: 12px; color: #fff; font-weight: 500;">@${w.username}</div>
-                                        <div style="font-size: 10px; color: #666;">${date}</div>
+                                    <div style="flex: 1; min-width: 0;">
+                                        <div style="font-size: 13px; color: #fff; font-weight: 600;">@${w.username}</div>
+                                        <div style="font-size: 10px; color: #888; margin-top: 2px;">${date}</div>
                                     </div>
-                                    <div style="font-size: 12px; color: #4CAF50; font-weight: 600;">${w.points || 0} pts</div>
+                                    <div style="font-size: 13px; color: #4CAF50; font-weight: 700; white-space: nowrap;">${w.points || 0} pts</div>
                                 </div>
                             `;
                         }).join('');
                     } else {
-                        container.innerHTML = '<div style="text-align: center; color: #666; padding: 20px; font-size: 12px;">No winners yet</div>';
+                        container.innerHTML = '<div style="text-align: center; color: #666; padding: 30px; font-size: 13px;">No winners yet</div>';
                     }
                 })
                 .catch(err => {
-                    console.error('Error loading winners leaderboard:', err);
+                    console.error('Error loading winners:', err);
                 });
         }
         
