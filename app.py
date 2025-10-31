@@ -70,7 +70,7 @@ def init_database_with_winners():
                 )
                 if success:
                     print(f"  Added initial winner: @{winner['username']}")
-                else:
+    else:
                     print(f"  Failed to add: @{winner['username']} (may already exist)")
             
             # Verify
@@ -88,10 +88,10 @@ init_database_with_winners()
 
 def get_est_now():
     """Get current time in EST/EDT"""
-    est = timezone(timedelta(hours=-5))
-    edt = timezone(timedelta(hours=-4))
-    now_utc = datetime.now(timezone.utc)
-    is_dst = now_utc.month >= 3 and now_utc.month < 11
+        est = timezone(timedelta(hours=-5))
+        edt = timezone(timedelta(hours=-4))
+        now_utc = datetime.now(timezone.utc)
+        is_dst = now_utc.month >= 3 and now_utc.month < 11
     return now_utc.astimezone(edt if is_dst else est)
 
 def select_winner():
@@ -210,12 +210,12 @@ def index():
         if now_est.hour == 0 and now_est.minute < 5:
             # Before 00:05 today, so next is today at 00:05
             next_midnight = now_est.replace(hour=0, minute=5, second=0, microsecond=0)
-        else:
+                else:
             # Already past 00:05 today, so next is tomorrow
             next_midnight = (now_est + timedelta(days=1)).replace(hour=0, minute=5, second=0, microsecond=0)
         
         # Get current winner
-        current_winner = db.get_current_winner()
+        current_winner = db.get_current_daily_winner()
         
         # Get all winners for the leaderboard - ensure we have a list
         try:
@@ -254,13 +254,13 @@ def index():
 def api_current_winner():
     """Get current winner with RNG details"""
     winner = db.get_current_winner()
-    if winner:
-        return jsonify({
-            'success': True,
-            'winner': winner,
+        if winner:
+            return jsonify({
+                'success': True,
+                'winner': winner,
             'total_eligible': winner.get('total_eligible'),
-            'random_seed': winner.get('random_seed'),
-            'selection_hash': winner.get('selection_hash')
+                'random_seed': winner.get('random_seed'),
+                'selection_hash': winner.get('selection_hash')
         })
     return jsonify({'success': False, 'winner': None})
 
