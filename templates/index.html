@@ -828,7 +828,7 @@
                     <div style="font-size: 14px; font-weight: 600; color: #fff; margin-bottom: 12px;">Winners</div>
                     <div style="font-size: 11px; color: #888; margin-bottom: 12px;">Automatic Daily • Next: 00:05 EST</div>
                     <div id="winnersLeaderboard" style="max-height: 300px; overflow-y: auto;">
-                        <!-- Winners will be loaded here -->
+                        <div style="text-align: center; color: #666; padding: 20px; font-size: 12px;">Loading winners...</div>
                     </div>
                 </div>
             </div>
@@ -895,9 +895,14 @@
         
         // Load winners leaderboard in the card
         function loadWinnersLeaderboard() {
+            console.log('Loading winners leaderboard...');
             fetch('/api/all_winners')
-                .then(r => r.json())
+                .then(r => {
+                    console.log('API response status:', r.status);
+                    return r.json();
+                })
                 .then(data => {
+                    console.log('API response data:', data);
                     const container = document.getElementById('winnersLeaderboard');
                     if (!container) {
                         console.error('Winners leaderboard container not found');
@@ -905,6 +910,7 @@
                     }
                     
                     if (data.success && data.winners && data.winners.length > 0) {
+                        console.log('Found winners:', data.winners.length);
                         // Sort chronologically by selected_at or drawing_date
                         const sorted = [...data.winners].sort((a, b) => {
                             const dateA = a.selected_at ? new Date(a.selected_at) : (a.drawing_date ? new Date(a.drawing_date) : new Date(0));
@@ -929,7 +935,9 @@
                                 </div>
                             `;
                         }).join('');
+                        console.log('Winners leaderboard updated');
                     } else {
+                        console.log('No winners in response:', data);
                         container.innerHTML = '<div style="text-align: center; color: #666; padding: 20px; font-size: 12px;">No winners yet</div>';
                     }
                 })
@@ -1351,8 +1359,16 @@
             }
         });
         
+        // Initialize on page load
+        console.log('Initializing page...');
         loadTicker();
-        loadWinnersLeaderboard();
+        
+        // Load winners leaderboard immediately
+        setTimeout(() => {
+            console.log('Calling loadWinnersLeaderboard...');
+            loadWinnersLeaderboard();
+        }, 100);
+        
         updateCountdown();
         setInterval(updateCountdown, 1000);
         setInterval(loadTicker, 300000); // Refresh ticker every 5 min
