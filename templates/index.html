@@ -668,7 +668,7 @@
                         </button>
                     </div>
                 </div>
-                <div class="table-container">
+                <div class="table-container" id="leaderboardTableContainer" onscroll="checkScrollPosition()">
                     <table>
                         <thead>
                             <tr>
@@ -710,51 +710,48 @@
                             </tr>
                             {% endfor %}
                         </tbody>
-                        {% if qualified_users|length > 100 %}
-                        <tfoot>
-                            <tr>
-                                <td colspan="4" style="text-align: center; padding: 20px;">
-                                    <button id="loadMoreBtn" onclick="loadMoreUsers()" 
-                                            style="background: #4CAF50; border: none; padding: 10px 20px; 
-                                                   color: #fff; font-size: 14px; border-radius: 4px; cursor: pointer; font-weight: 600;">
-                                        View More Users ({{ qualified_users|length - 100 }} remaining)
-                                    </button>
-                                    <template id="hiddenUsersTemplate">
-                                        {% for user in qualified_users[100:] %}
-                                        <tr data-username="{{ user.username|lower }}" 
-                                            onclick="selectUser('{{ user.username }}')"
-                                            style="cursor: pointer; transition: background 0.2s;"
-                                            onmouseover="this.style.background='#0f0f0f'" 
-                                            onmouseout="this.style.background='transparent'">
-                                            <td class="rank">{{ user.rank }}</td>
-                                            <td class="username">
-                                                <div style="display: flex; align-items: center; gap: 10px;">
-                                                    <img src="https://unavatar.io/twitter/{{ user.username }}" 
-                                                         alt="{{ user.username }}" 
-                                                         style="width: 32px; height: 32px; border-radius: 50%; border: 2px solid #222; object-fit: cover;"
-                                                         onerror="this.src='https://abs.twimg.com/sticky/default_profile_images/default_profile_normal.png';">
-                                                    <a href="https://twitter.com/{{ user.username }}" target="_blank" 
-                                                       onclick="event.stopPropagation();"
-                                                       style="color: #4CAF50; text-decoration: none;">
-                                                        @{{ user.username }}
-                                                    </a>
-                                                </div>
-                                            </td>
-                                            <td class="points" style="text-align: right;">{{ user.total_points }}</td>
-                                            <td style="text-align: center;">
-                                                {% if user.total_points >= 1 %}
-                                                <span style="color: #4CAF50; font-size: 18px; font-weight: bold;" title="Qualified (1+ points)">✓</span>
-                                                {% else %}
-                                                <span style="color: #666;">-</span>
-                                                {% endif %}
-                                            </td>
-                                        </tr>
-                                        {% endfor %}
-                                    </template>
-                                </td>
-                            </tr>
-                        </tfoot>
-                        {% endif %}
+                    </table>
+                    {% if qualified_users|length > 100 %}
+                    <div id="loadMoreContainer" style="display: none; text-align: center; padding: 20px; border-top: 1px solid #222;">
+                        <button id="loadMoreBtn" onclick="loadMoreUsers()" 
+                                style="background: #4CAF50; border: none; padding: 10px 20px; 
+                                       color: #fff; font-size: 14px; border-radius: 4px; cursor: pointer; font-weight: 600;">
+                            View More Users ({{ qualified_users|length - 100 }} remaining)
+                        </button>
+                    </div>
+                    <template id="hiddenUsersTemplate">
+                        {% for user in qualified_users[100:] %}
+                        <tr data-username="{{ user.username|lower }}" 
+                            onclick="selectUser('{{ user.username }}')"
+                            style="cursor: pointer; transition: background 0.2s;"
+                            onmouseover="this.style.background='#0f0f0f'" 
+                            onmouseout="this.style.background='transparent'">
+                            <td class="rank">{{ user.rank }}</td>
+                            <td class="username">
+                                <div style="display: flex; align-items: center; gap: 10px;">
+                                    <img src="https://unavatar.io/twitter/{{ user.username }}" 
+                                         alt="{{ user.username }}" 
+                                         style="width: 32px; height: 32px; border-radius: 50%; border: 2px solid #222; object-fit: cover;"
+                                         onerror="this.src='https://abs.twimg.com/sticky/default_profile_images/default_profile_normal.png';">
+                                    <a href="https://twitter.com/{{ user.username }}" target="_blank" 
+                                       onclick="event.stopPropagation();"
+                                       style="color: #4CAF50; text-decoration: none;">
+                                        @{{ user.username }}
+                                    </a>
+                                </div>
+                            </td>
+                            <td class="points" style="text-align: right;">{{ user.total_points }}</td>
+                            <td style="text-align: center;">
+                                {% if user.total_points >= 1 %}
+                                <span style="color: #4CAF50; font-size: 18px; font-weight: bold;" title="Qualified (1+ points)">✓</span>
+                                {% else %}
+                                <span style="color: #666;">-</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </template>
+                    {% endif %}
                     </table>
                 </div>
             </div>
@@ -1082,18 +1079,37 @@
             }
         }
         
+        function checkScrollPosition() {
+            {% if qualified_users|length > 100 %}
+            const container = document.getElementById('leaderboardTableContainer');
+            const loadMoreContainer = document.getElementById('loadMoreContainer');
+            
+            if (container && loadMoreContainer) {
+                // Check if scrolled near bottom (within 100px of bottom)
+                const scrollTop = container.scrollTop;
+                const scrollHeight = container.scrollHeight;
+                const clientHeight = container.clientHeight;
+                const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
+                
+                // Show button when scrolled within 100px of bottom
+                if (distanceFromBottom <= 100 && loadMoreContainer.style.display === 'none') {
+                    loadMoreContainer.style.display = 'block';
+                }
+            }
+            {% endif %}
+        }
+        
         function loadMoreUsers() {
             const hiddenUsersTemplate = document.getElementById('hiddenUsersTemplate');
-            const loadMoreBtn = document.getElementById('loadMoreBtn');
+            const loadMoreContainer = document.getElementById('loadMoreContainer');
             const tbody = document.getElementById('leaderboardBody');
-            const tfoot = loadMoreBtn ? loadMoreBtn.closest('tfoot') : null;
             
             if (hiddenUsersTemplate && tbody) {
                 const rows = hiddenUsersTemplate.content.querySelectorAll('tr');
                 rows.forEach(row => {
                     tbody.appendChild(row.cloneNode(true));
                 });
-                if (tfoot) tfoot.style.display = 'none';
+                if (loadMoreContainer) loadMoreContainer.style.display = 'none';
             }
         }
         
@@ -1228,6 +1244,15 @@
         updateCountdown();
         setInterval(updateCountdown, 1000);
         setInterval(loadTicker, 300000); // Refresh every 5 min
+        
+        // Initialize scroll check for leaderboard
+        {% if qualified_users|length > 100 %}
+        const leaderboardContainer = document.getElementById('leaderboardTableContainer');
+        if (leaderboardContainer) {
+            // Check initial scroll position
+            checkScrollPosition();
+        }
+        {% endif %}
     </script>
 </body>
 </html>
