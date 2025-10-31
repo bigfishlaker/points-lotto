@@ -1070,8 +1070,8 @@
         let countdownInterval = null;
         let autoRefreshInterval = null;
         
-        // Initialize reset time - calculate next midnight EST
-        function calculateNextMidnightEST() {
+        // Initialize reset time - calculate next 6-hour slot in EST (at :05)
+        function calculateNextSixHourSlotEST() {
             const now = new Date();
             
             // Get current UTC time components
@@ -1107,13 +1107,26 @@
                 }
             }
             
-            // Calculate next midnight EST (00:05)
-            const nextMidnightEST = new Date(Date.UTC(estYear, estMonth, estDate + 1, 0, 5, 0, 0));
+            // Determine next 6-hour slot (0,6,12,18) and calculate EST time at :05
+            const currentSlot = Math.floor(estHour / 6) * 6;
+            let nextSlotHour = (currentSlot + 6) % 24;
+            let nextSlotDate = estDate;
+            let nextSlotMonth = estMonth;
+            let nextSlotYear = estYear;
+            if (currentSlot + 6 >= 24) {
+                // Move to next day
+                const tmpDate = new Date(Date.UTC(estYear, estMonth, estDate));
+                tmpDate.setUTCDate(tmpDate.getUTCDate() + 1);
+                nextSlotYear = tmpDate.getUTCFullYear();
+                nextSlotMonth = tmpDate.getUTCMonth();
+                nextSlotDate = tmpDate.getUTCDate();
+            }
+            const nextSlotEST = new Date(Date.UTC(nextSlotYear, nextSlotMonth, nextSlotDate, nextSlotHour, 5, 0, 0));
             
-            // Convert EST midnight to UTC (add the offset back)
-            const nextMidnightUTC = new Date(nextMidnightEST.getTime() + (estOffsetHours * 60 * 60 * 1000));
+            // Convert EST slot to UTC (add the offset back)
+            const nextSlotUTC = new Date(nextSlotEST.getTime() + (estOffsetHours * 60 * 60 * 1000));
             
-            return nextMidnightUTC;
+            return nextSlotUTC;
         }
         
         try {
@@ -1121,13 +1134,13 @@
             if (providedTime) {
                 nextResetTime = new Date(providedTime);
                 if (isNaN(nextResetTime.getTime())) {
-                    nextResetTime = calculateNextMidnightEST();
+                    nextResetTime = calculateNextSixHourSlotEST();
                 }
             } else {
-                nextResetTime = calculateNextMidnightEST();
+                nextResetTime = calculateNextSixHourSlotEST();
             }
         } catch(e) {
-            nextResetTime = calculateNextMidnightEST();
+            nextResetTime = calculateNextSixHourSlotEST();
         }
         
         function fillSearchBar(username) {

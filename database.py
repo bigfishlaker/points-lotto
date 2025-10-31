@@ -80,13 +80,14 @@ class DatabaseManager:
             )
         ''')
         
-        # Daily 24h winners table - stores winners for the 24h drawing
+        # Daily winners table - now supports 6-hour drawing periods
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS daily_winners (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 winner_username TEXT NOT NULL,
                 winner_points INTEGER,
-                drawing_date DATE UNIQUE NOT NULL,
+                drawing_date DATE NOT NULL,
+                drawing_period TEXT,
                 selected_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 is_current BOOLEAN DEFAULT 1,
                 total_eligible INTEGER,
@@ -110,6 +111,15 @@ class DatabaseManager:
             pass
         try:
             cursor.execute('ALTER TABLE daily_winners ADD COLUMN selection_hash TEXT')
+        except sqlite3.OperationalError:
+            pass
+        try:
+            cursor.execute('ALTER TABLE daily_winners ADD COLUMN drawing_period TEXT')
+        except sqlite3.OperationalError:
+            pass
+        # Make drawing_period unique if possible (best-effort)
+        try:
+            cursor.execute('CREATE UNIQUE INDEX IF NOT EXISTS idx_daily_winners_period ON daily_winners(drawing_period)')
         except sqlite3.OperationalError:
             pass
         
@@ -318,8 +328,8 @@ class DatabaseManager:
             'keyword': result[7]
         } for result in results]
     
-    def record_daily_winner(self, username: str, points: int, drawing_date: str = None, total_eligible: int = None, random_seed: int = None, selection_hash: str = None, snapshot_date: str = None) -> bool:
-        """Record a daily 24h lottery winner with audit trail - GUARANTEED only one winner per day"""
+    def record_daily_winner(self, username: str, points: int, drawing_date: str = None, total_eligible: int = None, random_seed: int = None, selection_hash: str = None, snapshot_date: str = None, drawing_period: str = None) -> bool:
+        """Record a lottery winner with audit trail - one per 6-hour drawing period"""
         from datetime import datetime, date
         import hashlib
         
@@ -337,41 +347,44 @@ class DatabaseManager:
             # Use an exclusive transaction to prevent race conditions
             conn.execute('BEGIN EXCLUSIVE')
             
-            # FIRST: Check if winner already exists for this date (within transaction)
-            cursor.execute('SELECT id, winner_username FROM daily_winners WHERE drawing_date = ?', (drawing_date,))
+            # Determine a period key; fallback to date-only if not provided
+            period_key = drawing_period or drawing_date
+            
+            # FIRST: Check if winner already exists for this period (within transaction)
+            cursor.execute('SELECT id, winner_username FROM daily_winners WHERE drawing_period = ? OR (drawing_period IS NULL AND drawing_date = ?)', (period_key, drawing_date))
             existing = cursor.fetchone()
             
             if existing:
-                # Winner already selected for today - ensure it's marked as current and don't overwrite
-                cursor.execute('UPDATE daily_winners SET is_current = 1 WHERE drawing_date = ?', (drawing_date,))
+                # Winner already selected for this period - ensure it's marked as current and don't overwrite
+                cursor.execute('UPDATE daily_winners SET is_current = 1 WHERE drawing_period = ? OR (drawing_period IS NULL AND drawing_date = ?)', (period_key, drawing_date))
                 conn.commit()
                 conn.close()
-                print(f"🛡️ Winner already exists for {drawing_date}: @{existing[1]} - preventing duplicate")
+                print(f"🛡️ Winner already exists for period {period_key}: @{existing[1]} - preventing duplicate")
                 return False
             
             # Only set previous winners to not current if we're inserting a new one
-            cursor.execute('UPDATE daily_winners SET is_current = 0 WHERE drawing_date != ?', (drawing_date,))
+            cursor.execute('UPDATE daily_winners SET is_current = 0 WHERE 1=1')
             
             # Create selection hash for verification
             if selection_hash is None:
                 hash_input = f"{drawing_date}{username}{points}{random_seed or 0}"
                 selection_hash = hashlib.sha256(hash_input.encode()).hexdigest()[:16]
             
-            # Insert new winner - UNIQUE constraint on drawing_date will prevent duplicates
+            # Insert new winner - UNIQUE index on drawing_period will prevent duplicates
             cursor.execute('''
-                INSERT INTO daily_winners (winner_username, winner_points, drawing_date, is_current, total_eligible, random_seed, selection_hash, snapshot_date)
-                VALUES (?, ?, ?, 1, ?, ?, ?, ?)
-            ''', (username, points, drawing_date, total_eligible, random_seed, selection_hash, snapshot_date))
+                INSERT INTO daily_winners (winner_username, winner_points, drawing_date, drawing_period, is_current, total_eligible, random_seed, selection_hash, snapshot_date)
+                VALUES (?, ?, ?, ?, 1, ?, ?, ?, ?)
+            ''', (username, points, drawing_date, period_key, total_eligible, random_seed, selection_hash, snapshot_date))
             
             conn.commit()
             conn.close()
-            print(f"✅ Winner recorded successfully: @{username} for {drawing_date}")
+            print(f"✅ Winner recorded successfully: @{username} for period {period_key}")
             return True
         except sqlite3.IntegrityError as e:
             # UNIQUE constraint violation - winner already exists (race condition caught)
             conn.rollback()
             conn.close()
-            print(f"🛡️ IntegrityError: Winner already exists for {drawing_date} - race condition prevented")
+            print(f"🛡️ IntegrityError: Winner already exists for period {period_key} - race condition prevented")
             return False
         except sqlite3.Error as e:
             conn.rollback()
@@ -432,6 +445,29 @@ class DatabaseManager:
                 'drawing_date': result[2],
                 'selected_at': result[3],
                 'snapshot_date': result[4]
+            }
+        return None
+    
+    def get_winner_for_period(self, drawing_period: str) -> Optional[Dict]:
+        """Get the winner for a specific 6-hour drawing period key"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT winner_username, winner_points, drawing_date, selected_at, snapshot_date, drawing_period
+            FROM daily_winners
+            WHERE drawing_period = ?
+            LIMIT 1
+        ''', (drawing_period,))
+        result = cursor.fetchone()
+        conn.close()
+        if result:
+            return {
+                'username': result[0],
+                'points': result[1],
+                'drawing_date': result[2],
+                'selected_at': result[3],
+                'snapshot_date': result[4],
+                'drawing_period': result[5]
             }
         return None
     

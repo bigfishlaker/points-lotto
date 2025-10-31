@@ -157,7 +157,7 @@ def dashboard():
         for idx, user in enumerate(qualified, 1):
             user['rank'] = idx
         
-        # Calculate next reset time - midnight EST (00:05)
+        # Calculate next reset time - next 6-hour slot EST at :05
         from datetime import timezone, timedelta
         est = timezone(timedelta(hours=-5))
         edt = timezone(timedelta(hours=-4))
@@ -166,9 +166,12 @@ def dashboard():
         est_offset = edt if is_dst else est
         now_est = now_utc.astimezone(est_offset)
         
-        # Calculate next midnight EST + 5 minutes
-        next_midnight_est = (now_est + timedelta(days=1)).replace(hour=0, minute=5, second=0, microsecond=0)
-        next_reset_iso = next_midnight_est.isoformat()
+        # Next slot hours: 0,6,12,18
+        current_slot = (now_est.hour // 6) * 6
+        next_slot_hour = (current_slot + 6) % 24
+        next_slot_day_increment = 1 if current_slot + 6 >= 24 else 0
+        next_slot_est = (now_est + timedelta(days=next_slot_day_increment)).replace(hour=next_slot_hour, minute=5, second=0, microsecond=0)
+        next_reset_iso = next_slot_est.isoformat()
         
         # Get current daily winner
         current_winner = db.get_current_daily_winner()
@@ -440,7 +443,7 @@ def qualified_users():
         # Sort by points descending
         qualified.sort(key=lambda x: x['total_points'], reverse=True)
         
-        # Calculate next reset time - midnight EST (00:05)
+        # Calculate next reset time - next 6-hour slot EST at :05
         from datetime import timezone, timedelta
         est = timezone(timedelta(hours=-5))
         edt = timezone(timedelta(hours=-4))
@@ -449,8 +452,11 @@ def qualified_users():
         est_offset = edt if is_dst else est
         now_est = now_utc.astimezone(est_offset)
         
-        next_midnight_est = (now_est + timedelta(days=1)).replace(hour=0, minute=5, second=0, microsecond=0)
-        next_midnight = next_midnight_est.astimezone(timezone.utc)
+        current_slot = (now_est.hour // 6) * 6
+        next_slot_hour = (current_slot + 6) % 24
+        next_slot_day_increment = 1 if current_slot + 6 >= 24 else 0
+        next_slot_est = (now_est + timedelta(days=next_slot_day_increment)).replace(hour=next_slot_hour, minute=5, second=0, microsecond=0)
+        next_midnight = next_slot_est.astimezone(timezone.utc)
         now_utc_local = datetime.now(timezone.utc)
         time_until_reset = (next_midnight - now_utc_local).total_seconds()
         
@@ -463,7 +469,7 @@ def qualified_users():
                              total=len(qualified),
                              is_baseline=is_baseline,
                              view=view,
-                             next_reset_iso=next_midnight_est.isoformat(),
+                             next_reset_iso=next_slot_est.isoformat(),
                              current_winner=current_winner)
     except Exception as e:
         return f"Error: {str(e)}", 500
@@ -581,7 +587,7 @@ def api_check_user():
         }), 500
 
 def select_daily_winner_with_fresh_data():
-    """Select daily winner - fetches FRESH data first, then selects winner"""
+    """Select winner for current 6-hour EST period - fetches FRESH data first"""
     if not POINTSMARKET_ENABLED:
         print("❌ PointsMarket not enabled, cannot select winner")
         return None
@@ -598,7 +604,7 @@ def select_daily_winner_with_fresh_data():
         est_offset = edt if is_dst else est
         now_est = now_utc.astimezone(est_offset)
         
-        print(f"\n🎯 [{now_est.strftime('%H:%M:%S EST')}] Starting daily winner selection...")
+        print(f"\n🎯 [{now_est.strftime('%H:%M:%S EST')}] Starting winner selection for current 6-hour period...")
         
         # STEP 1: Fetch FRESH data from PointsMarket
         print("📊 Fetching fresh leaderboard data from PointsMarket...")
@@ -633,12 +639,14 @@ def select_daily_winner_with_fresh_data():
         
         print(f"✅ {len(qualified)} qualified users")
         
-        # STEP 5: Check if winner already exists for today - using EST date
+        # STEP 5: Check if winner already exists for this 6-hour period (EST)
         drawing_date = now_est.date().isoformat()
-        existing = db.get_winner_for_date(drawing_date)
+        period_slot = (now_est.hour // 6) * 6  # 0,6,12,18
+        drawing_period = f"{drawing_date}T{period_slot:02d}:00-EST"
+        existing = db.get_winner_for_period(drawing_period)
         if existing:
-            print(f"✅ Winner already selected for {drawing_date}: @{existing['username']}")
-            print(f"   Will not select another winner until 00:05 EST tomorrow")
+            print(f"✅ Winner already selected for period {drawing_period}: @{existing['username']}")
+            print(f"   Will not select another winner until next 6-hour slot")
             return existing
         
         # STEP 6: Select winner randomly
@@ -659,13 +667,14 @@ def select_daily_winner_with_fresh_data():
             f"{drawing_date}{winner_username}{winner_points}{random_seed}{len(qualified)}".encode()
         ).hexdigest()[:16]
         
-        # STEP 7: Save winner with snapshot date
+        # STEP 7: Save winner with snapshot date and period
         success = db.record_daily_winner(
             winner_username, winner_points, drawing_date, 
             total_eligible=len(qualified),
             random_seed=random_seed,
             selection_hash=selection_hash,
-            snapshot_date=today_str
+            snapshot_date=today_str,
+            drawing_period=drawing_period
         )
         
         if success:
@@ -697,20 +706,20 @@ def select_daily_winner_with_fresh_data():
 _winner_selection_lock = threading.Lock()
 
 def daily_winner_scheduler():
-    """Background thread that selects winner automatically at midnight EST - GUARANTEED one winner per day"""
+    """Background thread that selects winner automatically every 6 hours (EST) at :05 past the hour"""
     from datetime import timezone, timedelta
     
     # EST is UTC-5, EDT is UTC-4
     est = timezone(timedelta(hours=-5))
     edt = timezone(timedelta(hours=-4))
     
-    print("🕐 Daily winner scheduler started")
-    print("   Will select winner at 00:05 EST (5 minutes after midnight) each day")
-    print("   Waits 5 minutes after midnight for PointsMarket hourly update")
+    print("🕐 6-hour winner scheduler started")
+    print("   Will select winners at 00:05, 06:05, 12:05, 18:05 EST")
+    print("   Waits 5 minutes after slot boundary for PointsMarket hourly update")
     print("   Checks every minute - waits for timer, then fetches fresh data")
-    print("   🔒 Thread-safe lock ensures only ONE winner per day")
+    print("   🔒 Thread-safe lock ensures only ONE winner per 6-hour slot")
     
-    last_processed_date = None
+    last_processed_period = None
     
     while True:
         try:
@@ -723,21 +732,23 @@ def daily_winner_scheduler():
             
             # Convert to EST
             now_est = now_utc.astimezone(est_offset)
-            current_date = now_est.date()
+            # Determine current slot (0,6,12,18)
+            slot = (now_est.hour // 6) * 6
+            drawing_date = now_est.date().isoformat()
+            period_key = f"{drawing_date}T{slot:02d}:00-EST"
             
-            # Check if we're past midnight EST (00:05-00:10 window for fairness - wait for PointsMarket to update)
-            if now_est.hour == 0 and 5 <= now_est.minute <= 10:
-                # New day detected, check if we've already processed it
-                if last_processed_date != current_date:
+            # Check if we're in the :05-:10 window of the slot
+            if 5 <= now_est.minute <= 10:
+                # New slot detected, check if we've already processed it
+                if last_processed_period != period_key:
                     # USE LOCK to prevent concurrent selections
                     with _winner_selection_lock:
                         # Double-check inside lock (another process might have selected while we waited)
-                        today_str = current_date.isoformat()
-                        existing = db.get_winner_for_date(today_str)
+                        existing = db.get_winner_for_period(period_key)
                         
                         if not existing:
-                            print(f"\n⏰ MIDNIGHT EST DETECTED! {now_est.strftime('%Y-%m-%d %H:%M:%S EST')} ({now_utc.strftime('%H:%M:%S UTC')})")
-                            print("⏳ Waiting 5 minutes after midnight for PointsMarket to update...")
+                            print(f"\n⏰ SLOT WINDOW DETECTED! {now_est.strftime('%Y-%m-%d %H:%M:%S EST')} ({now_utc.strftime('%H:%M:%S UTC')})")
+                            print("⏳ Waiting 5 minutes after slot boundary for PointsMarket to update...")
                             print("=" * 60)
                             time.sleep(300)  # Wait 5 minutes for PointsMarket hourly update
                             print("🚀 Timer has reached zero - selecting winner NOW")
@@ -756,13 +767,13 @@ def daily_winner_scheduler():
                                 print("🔓 Lock released")
                                 print("=" * 60)
                         else:
-                            print(f"✅ Winner already exists for {today_str}: @{existing['username']} (no selection needed)")
+                            print(f"✅ Winner already exists for {period_key}: @{existing['username']} (no selection needed)")
                     
-                    last_processed_date = current_date
+                    last_processed_period = period_key
             else:
-                # Update last_processed_date when we're past the midnight window
-                if now_est.hour > 0:
-                    last_processed_date = current_date
+                # Update last_processed_period when we're past the window
+                if now_est.minute > 10:
+                    last_processed_period = period_key
             
             # Sleep for 60 seconds before checking again
             time.sleep(60)
@@ -789,7 +800,7 @@ ensure_scheduler_started()
 @app.route('/api/select_winner', methods=['POST'])
 @limiter.limit("5 per hour") if limiter else lambda f: f
 def api_select_winner():
-    """API endpoint to select a daily winner (can be called manually or by scheduler)"""
+    """API endpoint to select a winner for the current 6-hour period (manual or scheduler)"""
     if not POINTSMARKET_ENABLED:
         return jsonify({'error': 'PointsMarket integration not available'}), 404
     
@@ -802,30 +813,32 @@ def api_select_winner():
     est_offset = edt if is_dst else est
     now_est = now_utc.astimezone(est_offset)
     drawing_date = now_est.date().isoformat()
+    slot = (now_est.hour // 6) * 6
+    period_key = f"{drawing_date}T{slot:02d}:00-EST"
     
-    existing = db.get_winner_for_date(drawing_date)
+    existing = db.get_winner_for_period(period_key)
     
     if existing:
         # Winner already selected for today - return existing winner
         return jsonify({
             'success': True,
-            'message': 'Winner already selected for today',
+            'message': 'Winner already selected for this period',
             'winner': {
                 'username': existing['username'],
                 'points': existing['points'],
                 'drawing_date': existing['drawing_date']
             },
-            'note': 'No new winner selected - current winner remains active'
+            'note': 'No new winner selected - current winner remains active for this slot'
         })
     
     # Use lock to prevent concurrent selections via API
     with _winner_selection_lock:
         # Double-check inside lock
-        existing_check = db.get_winner_for_date(drawing_date)
+        existing_check = db.get_winner_for_period(period_key)
         if existing_check:
             return jsonify({
                 'success': True,
-                'message': 'Winner already selected for today (race condition prevented)',
+                'message': 'Winner already selected for this period (race condition prevented)',
                 'winner': {
                     'username': existing_check['username'],
                     'points': existing_check['points'],
