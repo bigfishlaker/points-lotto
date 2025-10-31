@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>💵 Points Lotto</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #000;
+            color: #fff;
+            min-height: 100vh;
+            padding: 0;
+        }
+        
+        /* Header */
+        .header {
+            background: #111;
+            border-bottom: 1px solid #222;
+            padding: 20px 0;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        
+        .header-content {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 0 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .logo {
+            font-size: 24px;
+            font-weight: 700;
+            color: #fff;
+        }
+        
+        /* Winners Ticker */
+        .winners-ticker {
+            background: #0a0a0a;
+            border-bottom: 1px solid #222;
+            overflow: hidden;
+            padding: 12px 0;
+        }
+        
+        .winners-track {
+            display: inline-block;
+            white-space: nowrap;
+            animation: scroll 40s linear infinite;
+        }
+        
+        .winner-item {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            margin-right: 32px;
+            font-size: 14px;
+            color: #ccc;
+        }
+        
+        .winner-chip {
+            background: #1a1a1a;
+            border: 1px solid #333;
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: #fff;
+        }
+        
+        @keyframes scroll {
+            0% { transform: translateX(0); }
+            100% { transform: translateX(-50%); }
+        }
+        
+        /* Container */
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 40px 24px;
+        }
+        
+        /* Stats Grid */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+            margin-bottom: 40px;
+        }
+        
+        .stat-card {
+            background: #111;
+            border: 1px solid #222;
+            border-radius: 8px;
+            padding: 24px;
+        }
+        
+        .stat-label {
+            font-size: 13px;
+            color: #888;
+            margin-bottom: 8px;
+        }
+        
+        .stat-value {
+            font-size: 32px;
+            font-weight: 700;
+            color: #fff;
+        }
+        
+        /* Main Content */
+        .main-grid {
+            display: grid;
+            grid-template-columns: 1fr 400px;
+            gap: 24px;
+        }
+        
+        @media (max-width: 968px) {
+            .main-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+        
+        /* Leaderboard */
+        .leaderboard-card {
+            background: #111;
+            border: 1px solid #222;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        
+        .card-header {
+            padding: 20px;
+            border-bottom: 1px solid #222;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .card-title {
+            font-size: 18px;
+            font-weight: 600;
+        }
+        
+        .table-container {
+            overflow-x: auto;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        thead {
+            background: #0a0a0a;
+        }
+        
+        th {
+            padding: 12px 20px;
+            text-align: left;
+            font-size: 12px;
+            font-weight: 600;
+            color: #888;
+            text-transform: uppercase;
+            border-bottom: 1px solid #222;
+        }
+        
+        td {
+            padding: 16px 20px;
+            border-bottom: 1px solid #1a1a1a;
+            font-size: 14px;
+        }
+        
+        tbody tr:hover {
+            background: #1a1a1a;
+        }
+        
+        .rank {
+            font-weight: 600;
+            color: #666;
+            width: 60px;
+        }
+        
+        .username {
+            font-weight: 600;
+            color: #fff;
+        }
+        
+        .points {
+            color: #4CAF50;
+            font-weight: 600;
+        }
+        
+        /* Winner Card */
+        .winner-card {
+            background: #111;
+            border: 1px solid #222;
+            border-radius: 8px;
+            padding: 24px;
+            margin-bottom: 24px;
+        }
+        
+        .winner-title {
+            font-size: 13px;
+            color: #888;
+            margin-bottom: 12px;
+            text-transform: uppercase;
+        }
+        
+        .winner-name {
+            font-size: 28px;
+            font-weight: 700;
+            color: #fff;
+            margin-bottom: 8px;
+        }
+        
+        .winner-details {
+            display: flex;
+            gap: 24px;
+            margin-top: 16px;
+            padding-top: 16px;
+            border-top: 1px solid #222;
+        }
+        
+        .winner-detail {
+            font-size: 13px;
+        }
+        
+        .winner-detail-label {
+            color: #888;
+            margin-bottom: 4px;
+        }
+        
+        .winner-detail-value {
+            color: #fff;
+            font-weight: 600;
+        }
+        
+        /* Countdown */
+        .countdown-card {
+            background: #111;
+            border: 1px solid #222;
+            border-radius: 8px;
+            padding: 24px;
+            text-align: center;
+        }
+        
+        .countdown-time {
+            font-size: 36px;
+            font-weight: 700;
+            font-variant-numeric: tabular-nums;
+            margin-bottom: 8px;
+        }
+        
+        .countdown-label {
+            font-size: 13px;
+            color: #888;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="header-content">
+            <div class="logo">💵 Points Lotto</div>
+            <div style="font-size: 14px; color: #888;">Daily Winner Selection</div>
+        </div>
+    </div>
+    
+    <!-- Winners Ticker -->
+    <div id="winnersTicker" class="winners-ticker" style="display:none;">
+        <div class="winners-track" id="winnersTrack"></div>
+    </div>
+    
+    <div class="container">
+        <!-- Stats -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-label">Qualified Users</div>
+                <div class="stat-value" id="totalQualified">{{ total_qualified or 0 }}</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Today's Winner</div>
+                <div class="stat-value" id="winnerName" style="font-size: 20px;">
+                    {% if current_winner %}@{{ current_winner.username }}{% else %}--{% endif %}
+                </div>
+            </div>
+        </div>
+        
+        <div class="main-grid">
+            <!-- Leaderboard -->
+            <div class="leaderboard-card">
+                <div class="card-header">
+                    <div class="card-title">Leaderboard</div>
+                    <div style="font-size: 13px; color: #888;">All users with 1+ point qualify</div>
+                </div>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th class="rank">#</th>
+                                <th>Username</th>
+                                <th style="text-align: right;">Points</th>
+                            </tr>
+                        </thead>
+                        <tbody id="leaderboardBody">
+                            {% for user in qualified_users %}
+                            <tr>
+                                <td class="rank">{{ user.rank }}</td>
+                                <td class="username">@{{ user.username }}</td>
+                                <td class="points" style="text-align: right;">{{ user.total_points }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            
+            <!-- Sidebar -->
+            <div>
+                <!-- Current Winner -->
+                {% if current_winner %}
+                <div class="winner-card">
+                    <div class="winner-title">🏆 Current Winner</div>
+                    <div class="winner-name">@{{ current_winner.username }}</div>
+                    <div class="winner-details">
+                        <div class="winner-detail">
+                            <div class="winner-detail-label">Points</div>
+                            <div class="winner-detail-value">{{ current_winner.points }}</div>
+                        </div>
+                        <div class="winner-detail">
+                            <div class="winner-detail-label">Date</div>
+                            <div class="winner-detail-value">{{ current_winner.drawing_date }}</div>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+                
+                <!-- Countdown -->
+                <div class="countdown-card">
+                    <div class="countdown-time" id="countdown">00:00:00</div>
+                    <div class="countdown-label">Until Next Drawing</div>
+                    <div style="font-size: 11px; color: #666; margin-top: 8px;">Next: 00:05 EST</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // Load winners ticker
+        function loadTicker() {
+            fetch('/api/all_winners')
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success && data.winners && data.winners.length > 0) {
+                        const items = data.winners.map(w => 
+                            `<span class="winner-item">
+                                <span class="winner-chip">@${w.username}</span>
+                                <span>won</span>
+                                <span class="winner-chip">${w.points || 0} pts</span>
+                                <span style="color: #666;">${w.drawing_date || ''}</span>
+                            </span>`
+                        ).join('');
+                        document.getElementById('winnersTrack').innerHTML = items + items;
+                        document.getElementById('winnersTicker').style.display = 'block';
+                    }
+                });
+        }
+        
+        // Countdown timer
+        const nextReset = new Date('{{ next_reset }}');
+        function updateCountdown() {
+            const now = new Date();
+            const diff = nextReset - now;
+            
+            if (diff <= 0) {
+                document.getElementById('countdown').textContent = '00:00:00';
+                setTimeout(() => location.reload(), 1000);
+                return;
+            }
+            
+            const hours = Math.floor(diff / 3600000);
+            const minutes = Math.floor((diff % 3600000) / 60000);
+            const seconds = Math.floor((diff % 60000) / 1000);
+            
+            document.getElementById('countdown').textContent = 
+                `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+        }
+        
+        // Initialize
+        loadTicker();
+        updateCountdown();
+        setInterval(updateCountdown, 1000);
+        setInterval(loadTicker, 300000); // Refresh every 5 min
+    </script>
+</body>
+</html>
+

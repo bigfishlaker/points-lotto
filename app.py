@@ -1,1092 +1,205 @@
-from flask import Flask, render_template, request, jsonify, redirect, url_for, abort
-from datetime import datetime, timedelta, date
+from flask import Flask, render_template, request, jsonify
+from datetime import datetime, timezone, timedelta
 import threading
 import time
 import random
 import hashlib
 import os
-from functools import wraps
-from database import DatabaseManager
-from lottery_engine import LotteryEngine
-from config import Config
-
-# Twitter monitor is optional - import only if available
-try:
-    from twitter_monitor import TwitterMonitor
-    TWITTER_MONITOR_AVAILABLE = True
-except ImportError:
-    TwitterMonitor = None
-    TWITTER_MONITOR_AVAILABLE = False
-
-# Try to import flask-limiter for rate limiting
-try:
-    from flask_limiter import Limiter
-    from flask_limiter.util import get_remote_address
-    LIMITER_AVAILABLE = True
-except ImportError:
-    LIMITER_AVAILABLE = False
-    print("⚠️  flask-limiter not installed. Rate limiting disabled. Install with: pip install flask-limiter")
+from database_clean import DatabaseManager
 
 # PointsMarket integration
 try:
-    from points_integration import PointsMarketIntegration
     from pointsmarket_scraper import PointsMarketScraper
     POINTSMARKET_ENABLED = True
 except ImportError:
     POINTSMARKET_ENABLED = False
+    PointsMarketScraper = None
 
 app = Flask(__name__)
-config = Config()
-
-# Security: Require SECRET_KEY in production
-if config.DEBUG is False and config.SECRET_KEY == 'your-secret-key-here':
-    raise ValueError("SECRET_KEY must be set in environment variables for production deployment!")
-
-app.config['SECRET_KEY'] = config.SECRET_KEY
-
-# Initialize rate limiter if available
-limiter = None
-if LIMITER_AVAILABLE:
-    limiter = Limiter(
-        app=app,
-        key_func=get_remote_address,
-        default_limits=["200 per day", "50 per hour"],
-        storage_uri="memory://"
-    )
-    print("✅ Rate limiting enabled")
-else:
-    print("⚠️  Rate limiting disabled (install flask-limiter to enable)")
+app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'your-secret-key-here')
 
 # Initialize components
 db = DatabaseManager()
-lottery_engine = LotteryEngine()
-
-# Initialize Twitter monitor only if credentials are available and module is available
-twitter_monitor = None
-try:
-    if TWITTER_MONITOR_AVAILABLE and TwitterMonitor and Config().TWITTER_API_KEY and Config().TWITTER_API_SECRET:
-        twitter_monitor = TwitterMonitor()
-except Exception as e:
-    print(f"Twitter monitor not available: {e}")
-
-# Initialize PointsMarket integration if available
 if POINTSMARKET_ENABLED:
-    points_integration = PointsMarketIntegration()
     points_scraper = PointsMarketScraper()
 
-# Global variables for background tasks
-monitor_thread = None
-lottery_thread = None
-daily_winner_scheduler_thread = None
-_scheduler_started = False
-
-def ensure_scheduler_started():
-    """Ensure daily winner scheduler is started (only once, even with multiple workers)"""
-    global daily_winner_scheduler_thread, _scheduler_started
-    
-    if _scheduler_started or daily_winner_scheduler_thread is not None:
-        return
-    
-    if POINTSMARKET_ENABLED:
-        print("🎯 Starting daily winner scheduler...")
-        daily_winner_scheduler_thread = threading.Thread(
-            target=daily_winner_scheduler,
-            daemon=True
-        )
-        daily_winner_scheduler_thread.start()
-        _scheduler_started = True
-        print("✅ Daily winner scheduler running (will select winner at midnight)")
-
-# Admin API Key authentication
-ADMIN_API_KEY = os.getenv('ADMIN_API_KEY', None)
-
-def require_api_key(f):
-    """Decorator to protect admin endpoints with API key"""
-    @wraps(f)
-    def decorated_function(*args, **kwargs):
-        if not ADMIN_API_KEY:
-            return jsonify({
-                'success': False,
-                'message': 'Admin API not configured. Set ADMIN_API_KEY in environment.'
-            }), 503
-        
-        # Check for API key in header or JSON body
-        api_key = request.headers.get('X-API-Key')
-        if not api_key and request.is_json:
-            api_key = request.json.get('api_key')
-        
-        if api_key != ADMIN_API_KEY:
-            return jsonify({
-                'success': False,
-                'message': 'Unauthorized. Valid API key required.'
-            }), 401
-        
-        return f(*args, **kwargs)
-    return decorated_function
-
-@app.route('/')
-def dashboard():
-    """Main page - shows live qualified users for next drawing"""
-    if not POINTSMARKET_ENABLED:
-        return "PointsMarket integration not available", 404
-    
-    try:
-        from daily_points_tracker import DailyPointsTracker
-        from datetime import datetime, timedelta
-        
-        # Fetch FRESH live data for initial display
-        current_users = points_scraper.get_leaderboard(limit=None)
-        
-        # Always use baseline qualification: All users with 1+ point qualify
-        qualified = []
-        is_baseline = True
-        
-        for user in current_users:
-            current_points = user.get('total_points', 0)
-            if current_points >= 1:  # All users with at least 1 point qualify
-                qualified.append({
-                    'username': user['username'],
-                    'total_points': current_points,
-                    'gain': 0,
-                    'baseline': 0,
-                    'qualifies': True
-                })
-        
-        # Sort by total points and add rank numbers
-        qualified.sort(key=lambda x: x.get('total_points', 0), reverse=True)
-        for idx, user in enumerate(qualified, 1):
-            user['rank'] = idx
-        
-        # Calculate next reset time - next 6-hour slot EST at :05
-        from datetime import timezone, timedelta
-        est = timezone(timedelta(hours=-5))
-        edt = timezone(timedelta(hours=-4))
-        now_utc = datetime.now(timezone.utc)
-        is_dst = now_utc.month >= 3 and now_utc.month < 11
-        est_offset = edt if is_dst else est
-        now_est = now_utc.astimezone(est_offset)
-        
-        # Next slot hours: 0,6,12,18
-        current_slot = (now_est.hour // 6) * 6
-        next_slot_hour = (current_slot + 6) % 24
-        next_slot_day_increment = 1 if current_slot + 6 >= 24 else 0
-        next_slot_est = (now_est + timedelta(days=next_slot_day_increment)).replace(hour=next_slot_hour, minute=5, second=0, microsecond=0)
-        next_reset_iso = next_slot_est.isoformat()
-        
-        # Get current daily winner
-        current_winner = db.get_current_daily_winner()
-        
-        # Count how many actually qualify
-        actually_qualified = sum(1 for u in qualified if u.get('qualifies', False)) if qualified else 0
-        
-        return render_template('qualified.html',
-                             qualified_users=qualified,
-                             total=actually_qualified,
-                             is_baseline=is_baseline,
-                             next_reset_iso=next_reset_iso,
-                             current_winner=current_winner)
-    except Exception as e:
-        return f"Error: {str(e)}", 500
-
-@app.route('/keywords')
-def keywords():
-    """Keywords management page"""
-    active_keywords = db.get_active_keywords()
-    return render_template('keywords.html', keywords=active_keywords)
-
-@app.route('/winners')
-def winners():
-    """Winners history page"""
-    winners = db.get_lottery_history(limit=50)
-    return render_template('winners.html', winners=winners)
-
-@app.route('/users')
-def users():
-    """Users page"""
-    # Get all users with their stats
-    conn = db.db_path
-    import sqlite3
-    conn = sqlite3.connect(conn)
-    cursor = conn.cursor()
-    
-    cursor.execute('''
-        SELECT u.*, COUNT(e.id) as total_engagements, 
-               SUM(e.points_awarded) as total_points_earned
-        FROM users u
-        LEFT JOIN engagements e ON u.id = e.user_id
-        GROUP BY u.id
-        ORDER BY u.total_points DESC
-    ''')
-    
-    users = cursor.fetchall()
-    conn.close()
-    
-    users_data = [{
-        'id': user[0],
-        'twitter_id': user[1],
-        'username': user[2],
-        'display_name': user[3],
-        'is_verified': user[4],
-        'total_points': user[5],
-        'created_at': user[6],
-        'last_active': user[7],
-        'total_engagements': user[8],
-        'total_points_earned': user[9]
-    } for user in users]
-    
-    return render_template('users.html', users=users_data)
-
-@app.route('/api/run_lottery', methods=['POST'])
-@require_api_key
-def api_run_lottery():
-    """API endpoint to manually run lottery"""
-    try:
-        result = lottery_engine.manual_lottery_run()
-        return jsonify({
-            'success': True,
-            'message': 'Lottery run completed',
-            'result': result
-        })
-    except Exception as e:
-        return jsonify({
-            'success': False,
-            'message': f'Error running lottery: {str(e)}'
-        })
-
-@app.route('/api/start_monitoring', methods=['POST'])
-@require_api_key
-def api_start_monitoring():
-    """API endpoint to start Twitter monitoring"""
-    global monitor_thread
-    
-    if not twitter_monitor:
-        return jsonify({
-            'success': False,
-            'message': 'Twitter API credentials not configured'
-        })
-    
-    if monitor_thread and monitor_thread.is_alive():
-        return jsonify({
-            'success': False,
-            'message': 'Monitoring is already running'
-        })
-    
-    try:
-        account = request.json.get('account', Config().MAIN_TWITTER_ACCOUNT)
-        monitor_thread = threading.Thread(
-            target=twitter_monitor.monitor_account,
-            args=(account,),
-            daemon=True
-        )
-        monitor_thread.start()
-        
-        return jsonify({
-            'success': True,
-            'message': f'Started monitoring account: {account}'
-        })
-    except Exception as e:
-        return jsonify({
-            'success': False,
-            'message': f'Error starting monitoring: {str(e)}'
-        })
-
-@app.route('/api/stop_monitoring', methods=['POST'])
-@require_api_key
-def api_stop_monitoring():
-    """API endpoint to stop Twitter monitoring"""
-    global monitor_thread
-    
-    if monitor_thread and monitor_thread.is_alive():
-        # Note: This is a simple way to stop, in production you'd want proper thread management
-        monitor_thread = None
-        
-        return jsonify({
-            'success': True,
-            'message': 'Monitoring stopped'
-        })
-    else:
-        return jsonify({
-            'success': False,
-            'message': 'Monitoring is not running'
-        })
-
-@app.route('/api/start_lottery_scheduler', methods=['POST'])
-@require_api_key
-def api_start_lottery_scheduler():
-    """API endpoint to start lottery scheduler"""
-    global lottery_thread
-    
-    if lottery_thread and lottery_thread.is_alive():
-        return jsonify({
-            'success': False,
-            'message': 'Lottery scheduler is already running'
-        })
-    
-    try:
-        lottery_thread = threading.Thread(
-            target=lottery_engine.start_scheduler,
-            daemon=True
-        )
-        lottery_thread.start()
-        
-        return jsonify({
-            'success': True,
-            'message': 'Lottery scheduler started'
-        })
-    except Exception as e:
-        return jsonify({
-            'success': False,
-            'message': f'Error starting lottery scheduler: {str(e)}'
-        })
-
-@app.route('/api/reset_winners', methods=['POST'])
-@require_api_key
-def api_reset_winners():
-    """Reset all daily winners (admin only)"""
-    import sqlite3
-    
-    try:
-        conn = sqlite3.connect(db.db_path)
-        cursor = conn.cursor()
-        
-        # Get count before deletion
-        cursor.execute('SELECT COUNT(*) FROM daily_winners')
-        count = cursor.fetchone()[0]
-        
-        # Delete all winners
-        cursor.execute('DELETE FROM daily_winners')
-        conn.commit()
-        conn.close()
-        
-        return jsonify({
-            'success': True,
-            'message': f'Successfully cleared {count} winner(s). System ready for fresh drawing.'
-        })
-    except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
-
-@app.route('/api/stop_lottery_scheduler', methods=['POST'])
-@require_api_key
-def api_stop_lottery_scheduler():
-    """API endpoint to stop lottery scheduler"""
-    try:
-        lottery_engine.stop_scheduler()
-        return jsonify({
-            'success': True,
-            'message': 'Lottery scheduler stopped'
-        })
-    except Exception as e:
-        return jsonify({
-            'success': False,
-            'message': f'Error stopping lottery scheduler: {str(e)}'
-        })
-
-@app.route('/api/stats')
-def api_stats():
-    """API endpoint to get current stats"""
-    stats = lottery_engine.get_lottery_stats()
-    next_lottery = lottery_engine.get_next_lottery_time()
-    
-    return jsonify({
-        'stats': stats,
-        'next_lottery_time': next_lottery.isoformat() if next_lottery else None,
-        'monitoring_status': monitor_thread.is_alive() if monitor_thread else False,
-        'scheduler_status': lottery_thread.is_alive() if lottery_thread else False,
-        'twitter_configured': twitter_monitor is not None
-    })
-
-@app.route('/api/keywords')
-def api_keywords():
-    """API endpoint to get active keywords"""
-    keywords = db.get_active_keywords()
-    return jsonify(keywords)
-
-@app.route('/api/winners')
-def api_winners():
-    """API endpoint to get recent winners"""
-    winners = db.get_lottery_history(limit=20)
-    return jsonify(winners)
-
-@app.route('/qualified')
-@app.route('/dashboard')
-def qualified_users():
-    """Unified page: switch between min1 and 24h gain views via ?view=..."""
-    if not POINTSMARKET_ENABLED:
-        return "PointsMarket integration not available", 404
-    
-    try:
-        from daily_points_tracker import DailyPointsTracker
-        from datetime import datetime, timedelta
-        
-        # Always use baseline qualification: All users with 1+ point qualify
-        view = request.args.get('view', 'min1')  # Keep view parameter for template compatibility
-        qualified = []
-        is_baseline = True
-        
-        # Fetch current users and show all with 1+ point
-        current_users = points_scraper.get_leaderboard(limit=None)
-        for user in current_users:
-            current_points = user.get('total_points', 0)
-            if current_points >= 1:  # All users with at least 1 point qualify
-                qualified.append({
-                    'username': user['username'],
-                    'total_points': current_points,
-                    'rank': user.get('rank', 0),
-                    'gain': 0,
-                    'yesterday_points': 0,
-                    'today_points': current_points
-                })
-        
-        # Sort by points descending
-        qualified.sort(key=lambda x: x['total_points'], reverse=True)
-        
-        # Calculate next reset time - next 6-hour slot EST at :05
-        from datetime import timezone, timedelta
-        est = timezone(timedelta(hours=-5))
-        edt = timezone(timedelta(hours=-4))
-        now_utc = datetime.now(timezone.utc)
-        is_dst = now_utc.month >= 3 and now_utc.month < 11
-        est_offset = edt if is_dst else est
-        now_est = now_utc.astimezone(est_offset)
-        
-        current_slot = (now_est.hour // 6) * 6
-        next_slot_hour = (current_slot + 6) % 24
-        next_slot_day_increment = 1 if current_slot + 6 >= 24 else 0
-        next_slot_est = (now_est + timedelta(days=next_slot_day_increment)).replace(hour=next_slot_hour, minute=5, second=0, microsecond=0)
-        next_midnight = next_slot_est.astimezone(timezone.utc)
-        now_utc_local = datetime.now(timezone.utc)
-        time_until_reset = (next_midnight - now_utc_local).total_seconds()
-        
-        # Get current winner
-        current_winner = db.get_current_daily_winner()
-        
-        return render_template('qualified.html', 
-                             qualified_users=qualified,
-                             min_points=1,
-                             total=len(qualified),
-                             is_baseline=is_baseline,
-                             view=view,
-                             next_reset_iso=next_slot_est.isoformat(),
-                             current_winner=current_winner)
-    except Exception as e:
-        return f"Error: {str(e)}", 500
-
-@app.route('/api/qualified')
-@limiter.limit("30 per minute") if limiter else lambda f: f
-def api_qualified():
-    """API endpoint to get qualified users for next drawing - LIVE DATA"""
-    if not POINTSMARKET_ENABLED:
-        return jsonify({'error': 'PointsMarket integration not available'}), 404
-    
-    limit = request.args.get('limit', None, type=int)
-    
-    try:
-        from daily_points_tracker import DailyPointsTracker
-        
-        # Fetch FRESH live data
-        current_users = points_scraper.get_leaderboard(limit=None)
-        
-        # Always use baseline qualification: All users with 1+ point qualify
-        qualified = []
-        
-        for user in current_users:
-            current_points = user.get('total_points', 0)
-            if current_points >= 1:  # All users with at least 1 point qualify
-                qualified.append({
-                    'username': user['username'],
-                    'total_points': current_points,
-                    'gain': 0,
-                    'baseline': 0,
-                    'qualifies': True
-                })
-
-        # Sort by total points
-        qualified.sort(key=lambda x: x.get('total_points', 0), reverse=True)
-        
-        # Add rank numbers
-        for idx, user in enumerate(qualified, 1):
-            user['rank'] = idx
-        
-        if limit is not None and limit > 0:
-            qualified = qualified[:limit]
-
-        # All users qualify (baseline mode)
-        actually_qualified = len(qualified)
-        
-        return jsonify({
-            'success': True,
-            'qualified_users': qualified,
-            'total': len(qualified),
-            'qualified_count': actually_qualified,
-            'baseline_mode': True
-        })
-    except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
-
-@app.route('/api/sync_pointsmarket', methods=['POST'])
-@require_api_key
-def api_sync_pointsmarket():
-    """API endpoint to sync PointsMarket data"""
-    if not POINTSMARKET_ENABLED:
-        return jsonify({'error': 'PointsMarket integration not available'}), 404
-    
-    try:
-        min_points = request.json.get('min_points', 0) if request.json else 0
-        usernames = request.json.get('usernames', []) if request.json else []
-        
-        if usernames:
-            # Sync specific users
-            results = points_integration.bulk_sync_users(usernames)
-        else:
-            # Sync from leaderboard
-            results = points_integration.sync_qualified_leaderboard(min_points)
-        
-        return jsonify({
-            'success': True,
-            'results': results
-        })
-    except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
-
-@app.route('/api/check_user', methods=['GET'])
-def api_check_user():
-    """API endpoint to check if a user qualifies"""
-    if not POINTSMARKET_ENABLED:
-        return jsonify({'error': 'PointsMarket integration not available'}), 404
-    
-    try:
-        username = request.args.get('username')
-        min_points = request.args.get('min_points', 0, type=int)
-        
-        if not username:
-            return jsonify({'error': 'Username required'}), 400
-        
-        qualifies = points_integration.check_user_qualification(username, min_points)
-        user_data = points_scraper.get_user_points(username)
-        
-        return jsonify({
-            'success': True,
-            'username': username,
-            'qualifies': qualifies,
-            'user_data': user_data,
-            'min_points_required': min_points
-        })
-    except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
-
-def select_daily_winner_with_fresh_data():
-    """Select winner for current 6-hour EST period - fetches FRESH data first"""
-    if not POINTSMARKET_ENABLED:
-        print("❌ PointsMarket not enabled, cannot select winner")
-        return None
-    
-    try:
-        from daily_points_tracker import DailyPointsTracker
-        from datetime import timezone, timedelta
-        
-        # Use EST for date tracking
-        est = timezone(timedelta(hours=-5))
-        edt = timezone(timedelta(hours=-4))
-        now_utc = datetime.now(timezone.utc)
-        is_dst = now_utc.month >= 3 and now_utc.month < 11
-        est_offset = edt if is_dst else est
-        now_est = now_utc.astimezone(est_offset)
-        
-        print(f"\n🎯 [{now_est.strftime('%H:%M:%S EST')}] Starting winner selection for current 6-hour period...")
-        
-        # STEP 1: Fetch FRESH data from PointsMarket
-        print("📊 Fetching fresh leaderboard data from PointsMarket...")
-        tracker = DailyPointsTracker()
-        current_users = points_scraper.get_leaderboard(limit=None)
-        print(f"✅ Fetched {len(current_users)} users")
-        
-        # STEP 2: Save today's snapshot (with fresh data) - using EST date
-        today_str = now_est.date().isoformat()
-        print(f"💾 Saving snapshot for {today_str}...")
-        tracker.save_snapshot(current_users)
-        today_snapshot = tracker.load_snapshot(today_str)
-        
-        # STEP 3: Always use baseline qualification (all users with 1+ point qualify)
-        print("📅 Using baseline qualification: All users with ≥1 point qualify")
-        
-        # STEP 4: Build qualified users list (baseline mode - all users with 1+ point)
-        qualified = []
-        
-        # Always use baseline: all users with ≥1 point qualify
-        for username, user_data in today_snapshot.get('users', {}).items():
-            total_pts = user_data.get('total_points', 0)
-            if total_pts >= 1:
-                qualified.append({
-                    'username': username,
-                    'total_points': total_pts
-                })
-        
-        if not qualified:
-            print("❌ No eligible users found")
-            return None
-        
-        print(f"✅ {len(qualified)} qualified users")
-        
-        # STEP 5: Check if winner already exists for this 6-hour period (EST)
-        drawing_date = now_est.date().isoformat()
-        period_slot = (now_est.hour // 6) * 6  # 0,6,12,18
-        drawing_period = f"{drawing_date}T{period_slot:02d}:00-EST"
-        existing = db.get_winner_for_period(drawing_period)
-        if existing:
-            print(f"✅ Winner already selected for period {drawing_period}: @{existing['username']}")
-            print(f"   Will not select another winner until next 6-hour slot")
-            return existing
-        
-        # STEP 6: Select winner randomly
-        print("🎲 Selecting random winner...")
-        seed_string = f"{drawing_date}{datetime.now().isoformat()}{len(qualified)}"
-        random_seed = int(hashlib.sha256(seed_string.encode()).hexdigest()[:8], 16) % 1000000
-        
-        random.seed(random_seed)
-        winner = random.choice(qualified)
-        random.seed()  # Reset seed
-        
-        winner_username = winner.get('username')
-        winner_points = winner.get('total_points', 0)
-        winner_index = qualified.index(winner)
-        
-        # Create verifiable hash
-        selection_hash = hashlib.sha256(
-            f"{drawing_date}{winner_username}{winner_points}{random_seed}{len(qualified)}".encode()
-        ).hexdigest()[:16]
-        
-        # STEP 7: Save winner with snapshot date and period
-        success = db.record_daily_winner(
-            winner_username, winner_points, drawing_date, 
-            total_eligible=len(qualified),
-            random_seed=random_seed,
-            selection_hash=selection_hash,
-            snapshot_date=today_str,
-            drawing_period=drawing_period
-        )
-        
-        if success:
-            print(f"🏆 WINNER SELECTED: @{winner_username} ({winner_points} pts)")
-            print(f"   Position: #{winner_index + 1} of {len(qualified)}")
-            print(f"   Seed: {random_seed}")
-            print(f"   Hash: {selection_hash}")
-            return {
-                'username': winner_username,
-                'points': winner_points,
-                'drawing_date': drawing_date,
-                'total_eligible': len(qualified),
-                'random_seed': random_seed,
-                'selection_hash': selection_hash,
-                'seed_string': seed_string,
-                'winner_index': winner_index + 1
-            }
-        else:
-            print("❌ Failed to record winner")
-            return None
-            
-    except Exception as e:
-        print(f"❌ Error selecting winner: {e}")
-        import traceback
-        traceback.print_exc()
-        return None
-
-# Thread lock for winner selection to prevent concurrent selections
+# Global scheduler state
+_scheduler_running = False
+_scheduler_thread = None
 _winner_selection_lock = threading.Lock()
 
-def daily_winner_scheduler():
-    """Background thread that selects winner automatically every 6 hours (EST) at :05 past the hour"""
-    from datetime import timezone, timedelta
-    
-    # EST is UTC-5, EDT is UTC-4
-    est = timezone(timedelta(hours=-5))
-    edt = timezone(timedelta(hours=-4))
-    
-    print("🕐 6-hour winner scheduler started")
-    print("   Will select winners at 00:05, 06:05, 12:05, 18:05 EST")
-    print("   Waits 5 minutes after slot boundary for PointsMarket hourly update")
-    print("   Checks every minute - waits for timer, then fetches fresh data")
-    print("   🔒 Thread-safe lock ensures only ONE winner per 6-hour slot")
-    
-    last_processed_period = None
-    
-    while True:
-        try:
-            # Get current UTC time
-            now_utc = datetime.now(timezone.utc)
-            
-            # Determine if we're in daylight saving time (roughly Mar-Nov)
-            is_dst = now_utc.month >= 3 and now_utc.month < 11
-            est_offset = edt if is_dst else est
-            
-            # Convert to EST
-            now_est = now_utc.astimezone(est_offset)
-            # Determine current slot (0,6,12,18)
-            slot = (now_est.hour // 6) * 6
-            drawing_date = now_est.date().isoformat()
-            period_key = f"{drawing_date}T{slot:02d}:00-EST"
-            
-            # Check if we're in the :05-:10 window of the slot
-            if 5 <= now_est.minute <= 10:
-                # New slot detected, check if we've already processed it
-                if last_processed_period != period_key:
-                    # USE LOCK to prevent concurrent selections
-                    with _winner_selection_lock:
-                        # Double-check inside lock (another process might have selected while we waited)
-                        existing = db.get_winner_for_period(period_key)
-                        
-                        if not existing:
-                            print(f"\n⏰ SLOT WINDOW DETECTED! {now_est.strftime('%Y-%m-%d %H:%M:%S EST')} ({now_utc.strftime('%H:%M:%S UTC')})")
-                            print("⏳ Waiting 5 minutes after slot boundary for PointsMarket to update...")
-                            print("=" * 60)
-                            time.sleep(300)  # Wait 5 minutes for PointsMarket hourly update
-                            print("🚀 Timer has reached zero - selecting winner NOW")
-                            print("🔒 Lock acquired - ensuring single winner selection")
-                            print("📊 Step 1: Fetching FRESH data from PointsMarket...")
-                            print("=" * 60)
-                            result = select_daily_winner_with_fresh_data()
-                            if result:
-                                print("=" * 60)
-                                print(f"✅ Winner selection complete: @{result['username']}")
-                                print("🔓 Lock released")
-                                print("=" * 60)
-                            else:
-                                print("=" * 60)
-                                print("❌ Winner selection failed or was prevented")
-                                print("🔓 Lock released")
-                                print("=" * 60)
-                        else:
-                            print(f"✅ Winner already exists for {period_key}: @{existing['username']} (no selection needed)")
-                    
-                    last_processed_period = period_key
-            else:
-                # Update last_processed_period when we're past the window
-                if now_est.minute > 10:
-                    last_processed_period = period_key
-            
-            # Sleep for 60 seconds before checking again
-            time.sleep(60)
-            
-        except Exception as e:
-            print(f"❌ Error in daily winner scheduler: {e}")
-            import traceback
-            traceback.print_exc()
-            time.sleep(60)  # Wait before retrying
-
-# Initialize winner on startup if flag is set
-if os.getenv('INIT_WINNER') == 'true':
-    try:
-        from init_winner import init_winner
-        init_winner()
-    except Exception as e:
-        print(f"Warning: Could not initialize winner: {e}")
-
-# Start scheduler immediately when module is imported (works with gunicorn)
-# Must be called after daily_winner_scheduler function is defined
-# ENABLED: Automatic winner selection at midnight EST
-ensure_scheduler_started()
-
-@app.route('/api/select_winner', methods=['POST'])
-@limiter.limit("5 per hour") if limiter else lambda f: f
-def api_select_winner():
-    """API endpoint to select a winner for the current 6-hour period (manual or scheduler)"""
-    if not POINTSMARKET_ENABLED:
-        return jsonify({'error': 'PointsMarket integration not available'}), 404
-    
-    # FIRST: Check if winner already exists for today (using EST date) - prevent duplicate selections
-    from datetime import timezone, timedelta
+def get_est_now():
+    """Get current time in EST/EDT"""
     est = timezone(timedelta(hours=-5))
     edt = timezone(timedelta(hours=-4))
     now_utc = datetime.now(timezone.utc)
     is_dst = now_utc.month >= 3 and now_utc.month < 11
-    est_offset = edt if is_dst else est
-    now_est = now_utc.astimezone(est_offset)
-    drawing_date = now_est.date().isoformat()
-    slot = (now_est.hour // 6) * 6
-    period_key = f"{drawing_date}T{slot:02d}:00-EST"
-    
-    existing = db.get_winner_for_period(period_key)
-    
-    if existing:
-        # Winner already selected for today - return existing winner
-        return jsonify({
-            'success': True,
-            'message': 'Winner already selected for this period',
-            'winner': {
-                'username': existing['username'],
-                'points': existing['points'],
-                'drawing_date': existing['drawing_date']
-            },
-            'note': 'No new winner selected - current winner remains active for this slot'
-        })
-    
-    # Use lock to prevent concurrent selections via API
-    with _winner_selection_lock:
-        # Double-check inside lock
-        existing_check = db.get_winner_for_period(period_key)
-        if existing_check:
-            return jsonify({
-                'success': True,
-                'message': 'Winner already selected for this period (race condition prevented)',
-                'winner': {
-                    'username': existing_check['username'],
-                    'points': existing_check['points'],
-                    'drawing_date': existing_check['drawing_date']
-                }
-            })
-        
-        # Only proceed if no winner exists
-        result = select_daily_winner_with_fresh_data()
-    
-    if result:
-        return jsonify({
-            'success': True,
-            'winner': {
-                'username': result['username'],
-                'points': result['points'],
-                'drawing_date': result['drawing_date']
-            },
-            'total_eligible': result.get('total_eligible', 0),
-            'random_seed': result.get('random_seed'),
-            'selection_hash': result.get('selection_hash'),
-            'seed_string': result.get('seed_string'),
-            'winner_index': result.get('winner_index'),
-            'selection_criteria': 'All users with ≥1 total point qualify (baseline mode)'
-        })
-    else:
-        return jsonify({
-            'success': False,
-            'error': 'Failed to select winner or no eligible users'
-        }), 500
+    return now_utc.astimezone(edt if is_dst else est)
 
-@app.route('/api/check_qualification/<username>')
-@limiter.limit("20 per minute") if limiter else lambda f: f
-def api_check_qualification(username):
-    """API endpoint to check if a username qualifies for the daily lottery"""
+def select_winner():
+    """Select winner for today - baseline qualification (1+ point)"""
     if not POINTSMARKET_ENABLED:
-        return jsonify({'error': 'PointsMarket integration not available'}), 404
+        return None
     
     try:
-        from daily_points_tracker import DailyPointsTracker
+        now_est = get_est_now()
+        today_str = now_est.date().isoformat()
         
-        # Remove @ if present
-        username = username.lstrip('@').lower()
+        # Check if winner already exists
+        existing = db.get_winner_for_date(today_str)
+        if existing:
+            return existing
         
-        # Get current data
-        tracker = DailyPointsTracker()
-        today_str = datetime.now().strftime('%Y-%m-%d')
+        print(f"📊 Fetching leaderboard for {today_str}...")
+        users = points_scraper.get_leaderboard(limit=None)
         
-        # First try snapshot, but if user not found, fetch fresh data
-        today_snapshot = tracker.load_snapshot(today_str)
-        if not today_snapshot:
-            current_users = points_scraper.get_leaderboard(limit=None)
-            tracker.save_snapshot(current_users)
-            today_snapshot = tracker.load_snapshot(today_str)
+        # Baseline: all users with 1+ point qualify
+        qualified = [u for u in users if u.get('total_points', 0) >= 1]
         
-        # Check if user exists in today's data (case-insensitive lookup)
-        user_data = None
-        for key, value in today_snapshot.get('users', {}).items():
-            if key.lower() == username:
-                user_data = value
-                break
+        if not qualified:
+            print("❌ No eligible users")
+            return None
         
-        # If not found in snapshot, fetch fresh data from API
-        if not user_data:
-            print(f"User {username} not in snapshot, fetching fresh data...")
-            current_users = points_scraper.get_leaderboard(limit=None)
-            # Update snapshot with fresh data
-            tracker.save_snapshot(current_users)
-            today_snapshot = tracker.load_snapshot(today_str)
-            
-            # Try case-insensitive lookup again with fresh data
-            for key, value in today_snapshot.get('users', {}).items():
-                if key.lower() == username:
-                    user_data = value
-                    break
+        print(f"✅ {len(qualified)} qualified users")
         
-        if not user_data:
-            # Still not found - check all usernames for partial match
-            all_users = points_scraper.get_leaderboard(limit=None)
-            similar = [u for u in all_users if username in u.get('username', '').lower() or u.get('username', '').lower() in username]
-            if similar:
-                # Build a safe suggestions string without nested f-strings
-                suggestions = ", ".join(["@" + (u.get('username') or '') for u in similar[:3]])
-                return jsonify({
-                    'username': username,
-                    'found': False,
-                    'qualifies': False,
-                    'reason': 'User not found. Did you mean: ' + suggestions + '?',
-                    'total_points': 0,
-                    'gained_in_24h': 0,
-                    'similar_usernames': [u.get('username') for u in similar[:5]]
-                })
-            return jsonify({
-                'username': username,
-                'found': False,
-                'qualifies': False,
-                'reason': 'User not found in leaderboard. Make sure you\'re using your exact PointsMarket.io username.',
-                'total_points': 0,
-                'gained_in_24h': 0
-            })
+        # Select winner
+        seed_string = f"{today_str}{datetime.now().isoformat()}{len(qualified)}"
+        random_seed = int(hashlib.sha256(seed_string.encode()).hexdigest()[:8], 16) % 1000000
+        random.seed(random_seed)
+        winner = random.choice(qualified)
+        random.seed()
         
-        total_points = user_data.get('total_points', 0)
+        selection_hash = hashlib.sha256(
+            f"{today_str}{winner['username']}{winner['total_points']}{random_seed}".encode()
+        ).hexdigest()[:16]
         
-        # Always use baseline qualification: only need ≥1 total point
-        qualifies = total_points >= 1
-        reason = "✅ QUALIFIED! You have 1+ points (baseline mode)" if qualifies else f"❌ Need at least 1 point (you have {total_points})"
+        # Save winner
+        success = db.record_winner(
+            winner['username'],
+            winner['total_points'],
+            today_str,
+            total_eligible=len(qualified),
+            random_seed=random_seed,
+            selection_hash=selection_hash
+        )
         
-        return jsonify({
-            'username': username,
-            'found': True,
-            'qualifies': qualifies,
-            'reason': reason,
-            'total_points': total_points,
-            'gained_in_24h': 0,  # Baseline mode - no gain requirement
-            'rank': user_data.get('rank', 0)
-        })
-        
+        if success:
+            print(f"🏆 Winner: @{winner['username']} ({winner['total_points']} pts)")
+            return {
+                'username': winner['username'],
+                'points': winner['total_points'],
+                'drawing_date': today_str,
+                'total_eligible': len(qualified),
+                'random_seed': random_seed,
+                'selection_hash': selection_hash
+            }
+        return None
     except Exception as e:
-        return jsonify({
-            'error': str(e),
-            'username': username,
-            'qualifies': False
-        }), 500
+        print(f"❌ Error selecting winner: {e}")
+        return None
 
-@app.route('/api/all_winners')
-def api_all_winners():
-    """API endpoint to get all previous daily winners"""
+def daily_scheduler():
+    """Scheduler runs at 00:05 EST daily"""
+    global _scheduler_running
+    print("🕐 Scheduler started - will select winner at 00:05 EST daily")
+    
+    last_processed_date = None
+    
+    while _scheduler_running:
+        try:
+            now_est = get_est_now()
+            
+            # Check if it's 00:05-00:10 EST window
+            if now_est.hour == 0 and 5 <= now_est.minute <= 10:
+                today_str = now_est.date().isoformat()
+                
+                if last_processed_date != today_str:
+                    with _winner_selection_lock:
+                        existing = db.get_winner_for_date(today_str)
+                        if not existing:
+                            print(f"⏰ Selecting winner for {today_str}...")
+                            time.sleep(300)  # Wait 5 min for PointsMarket update
+                            select_winner()
+                        last_processed_date = today_str
+            elif now_est.hour > 0:
+                last_processed_date = None
+            
+            time.sleep(60)
+        except Exception as e:
+            print(f"❌ Scheduler error: {e}")
+            time.sleep(60)
+
+@app.route('/')
+def index():
+    """Main page - shows qualified users and current winner"""
+    if not POINTSMARKET_ENABLED:
+        return "PointsMarket integration not available", 404
+    
     try:
-        conn = db.db_path
-        import sqlite3
-        conn_db = sqlite3.connect(conn)
-        cursor = conn_db.cursor()
+        # Get qualified users (all with 1+ point)
+        users = points_scraper.get_leaderboard(limit=None)
+        qualified = [u for u in users if u.get('total_points', 0) >= 1]
+        qualified.sort(key=lambda x: x.get('total_points', 0), reverse=True)
         
-        cursor.execute('''
-            SELECT winner_username, winner_points, drawing_date, selected_at, total_eligible
-            FROM daily_winners
-            ORDER BY drawing_date DESC
-        ''')
+        # Add ranks
+        for idx, u in enumerate(qualified, 1):
+            u['rank'] = idx
         
-        results = cursor.fetchall()
-        conn_db.close()
+        # Calculate next midnight EST (00:05)
+        now_est = get_est_now()
+        next_midnight = (now_est + timedelta(days=1)).replace(hour=0, minute=5, second=0, microsecond=0)
         
-        winners = []
-        for result in results:
-            winners.append({
-                'username': result[0],
-                'points': result[1],
-                'drawing_date': result[2],
-                'selected_at': result[3],
-                'total_eligible': result[4]
-            })
+        # Get current winner
+        current_winner = db.get_current_winner()
         
-        return jsonify({
-            'success': True,
-            'winners': winners,
-            'total': len(winners)
-        })
+        return render_template('index.html',
+                             qualified_users=qualified[:100],  # Top 100
+                             total_qualified=len(qualified),
+                             next_reset=next_midnight.isoformat(),
+                             current_winner=current_winner)
     except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': str(e),
-            'winners': []
-        }), 500
+        return f"Error: {str(e)}", 500
 
 @app.route('/api/current_winner')
 def api_current_winner():
-    """API endpoint to get the current daily winner with RNG info"""
-    try:
-        winner = db.get_current_daily_winner()
-        if winner:
-            return jsonify({
-                'success': True,
-                'winner': winner,
-                'random_seed': winner.get('random_seed'),
-                'total_eligible': winner.get('total_eligible'),
-                'selection_hash': winner.get('selection_hash')
-            })
-        else:
-            return jsonify({
-                'success': False,
-                'winner': None
-            })
-    except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
+    """Get current winner"""
+    winner = db.get_current_winner()
+    if winner:
+        return jsonify({'success': True, 'winner': winner})
+    return jsonify({'success': False, 'winner': None})
 
-@app.route('/daily-tracking')
-def daily_tracking_page():
-    """Daily points tracking page"""
-    from daily_points_tracker import DailyPointsTracker
-    import os
-    from datetime import datetime, timedelta
+@app.route('/api/all_winners')
+def api_all_winners():
+    """Get all winners"""
+    winners = db.get_all_winners()
+    return jsonify({'success': True, 'winners': winners, 'total': len(winners)})
+
+@app.route('/api/qualified')
+def api_qualified():
+    """Get qualified users"""
+    if not POINTSMARKET_ENABLED:
+        return jsonify({'error': 'Not available'}), 404
     
-    tracker = DailyPointsTracker()
-    
-    # Get today's report
-    today_str = datetime.now().strftime('%Y-%m-%d')
-    yesterday_str = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
-    
-    # Check if today's snapshot exists
-    today_snapshot = tracker.load_snapshot(today_str)
-    yesterday_snapshot = tracker.load_snapshot(yesterday_str)
-    
-    # Get list of available snapshots
-    snapshots = []
-    if os.path.exists('daily_snapshots'):
-        snapshot_files = [f for f in os.listdir('daily_snapshots') if f.startswith('snapshot_') and f.endswith('.json')]
-        snapshots = sorted(snapshot_files, reverse=True)
-    
-    # Get report data
-    if today_snapshot and yesterday_snapshot:
-        gains_data = tracker.get_daily_gains(min_gain=1)
-    else:
-        gains_data = {
-            'baseline_created': True,
-            'date': today_str,
-            'total_users': len(today_snapshot.get('users', {})) if today_snapshot else 0
-        }
-    
-    # Get reports
-    reports = []
-    if os.path.exists('.'):
-        report_files = [f for f in os.listdir('.') if f.startswith('daily_report_') and f.endswith('.txt')]
-        reports = sorted(report_files, reverse=True)
-    
-    return render_template('daily_tracking.html',
-                         gains_data=gains_data,
-                         snapshots=snapshots,
-                         reports=reports,
-                         today_str=today_str,
-                         yesterday_str=yesterday_str)
+    users = points_scraper.get_leaderboard(limit=None)
+    qualified = [{'username': u['username'], 'total_points': u.get('total_points', 0), 'rank': idx+1}
+                 for idx, u in enumerate(sorted([u for u in users if u.get('total_points', 0) >= 1],
+                                                 key=lambda x: x.get('total_points', 0), reverse=True), 1)]
+    return jsonify({'success': True, 'qualified': qualified, 'total': len(qualified)})
+
+@app.route('/api/select_winner', methods=['POST'])
+def api_select_winner():
+    """Manually trigger winner selection"""
+    with _winner_selection_lock:
+        result = select_winner()
+        if result:
+            return jsonify({'success': True, 'winner': result})
+        return jsonify({'success': False, 'error': 'Failed or already exists'}), 400
+
+# Start scheduler
+if POINTSMARKET_ENABLED:
+    _scheduler_running = True
+    _scheduler_thread = threading.Thread(target=daily_scheduler, daemon=True)
+    _scheduler_thread.start()
 
 if __name__ == '__main__':
-    # Create templates directory and basic HTML templates
-    import os
-    os.makedirs('templates', exist_ok=True)
-    os.makedirs('static/css', exist_ok=True)
-    os.makedirs('static/js', exist_ok=True)
-    
-    # Scheduler already started when module was imported (works with gunicorn)
-    # This block only runs if script is executed directly (not via gunicorn)
-    ensure_scheduler_started()
-    
-    # Production: debug should be False
-    # Set DEBUG=True in .env only for local development
-    debug_mode = Config().DEBUG
-    app.run(debug=debug_mode, host='0.0.0.0', port=5000)
-
-
+    app.run(debug=True, host='0.0.0.0', port=5000)
