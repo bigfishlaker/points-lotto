@@ -44,6 +44,16 @@
             color: #fff;
         }
         
+        .ascii-art {
+            font-family: 'Courier New', monospace;
+            font-size: 16px;
+            line-height: 1.2;
+            color: #4CAF50;
+            white-space: pre;
+            text-align: center;
+            margin: 10px 0;
+        }
+        
         /* Winners Ticker */
         .winners-ticker {
             background: #0a0a0a;
@@ -629,7 +639,15 @@
 <body>
     <div class="header">
         <div class="header-content">
-            <div class="logo">💵 Points Lotto</div>
+            <div style="flex: 1;">
+                <div class="logo">💵 Points Lotto</div>
+                <div class="ascii-art">██████╗  ██████╗ ██╗███╗   ██╗████████╗███████╗
+██╔══██╗██╔═══██╗██║████╗  ██║╚══██╔══╝██╔════╝
+██████╔╝██║   ██║██║██╔██╗ ██║   ██║   ███████╗
+██╔═══╝ ██║   ██║██║██║╚██╗██║   ██║   ╚════██║
+██║     ╚██████╔╝██║██║ ╚████║   ██║   ███████║
+╚═╝      ╚═════╝ ╚═╝╚═╝  ╚═══╝   ╚═╝   ╚══════╝</div>
+            </div>
             <button onclick="viewWinner()" 
                     style="background: #4CAF50; border: none; padding: 8px 16px; 
                            color: #fff; font-size: 14px; border-radius: 4px; cursor: pointer; font-weight: 600;">
@@ -788,10 +806,12 @@
                 </div>
                 {% endif %}
                 
-                <!-- Arcade Button -->
-                <button class="arcade-button" onclick="showRngTerminal(); showWinnerProcess();" style="margin-top: 20px;">
-                    🎰 Select Winner
-                </button>
+                <!-- Note: Winner selection is automatic at 00:05 EST daily -->
+                <div style="background: #111; border: 1px solid #222; border-radius: 8px; padding: 16px; margin-top: 20px; text-align: center;">
+                    <div style="font-size: 12px; color: #666; margin-bottom: 8px;">Winner Selection</div>
+                    <div style="font-size: 14px; color: #4CAF50; font-weight: 600;">Automatic Daily</div>
+                    <div style="font-size: 11px; color: #888; margin-top: 4px;">Next: 00:05 EST</div>
+                </div>
             </div>
         </div>
     </div>
@@ -874,6 +894,12 @@
         }
         
         // RNG Terminal functions
+        /**
+         * VIEW WINNER BUTTON (Top Right):
+         * Opens the RNG terminal modal to view today's winner and the selection process.
+         * This is VIEW-ONLY - winner selection happens automatically at 00:05 EST daily.
+         * Shows: Today's winner, points, selection details, RNG seed, and verification hash.
+         */
         function viewWinner() {
             showRngTerminal();
             loadCurrentWinnerDisplay();
@@ -961,12 +987,18 @@
                 });
         }
         
+        /**
+         * SHOW WINNER PROCESS:
+         * Displays the animated RNG selection process in the terminal.
+         * This recreates the selection steps that happened automatically.
+         * VIEW-ONLY - does not actually select a winner (that happens automatically).
+         */
         function showWinnerProcess() {
             showRngTerminal();
             const output = document.getElementById('rngTerminalOutput');
             if (output) {
                 output.innerHTML = '';
-                addTerminalLine('$ Initializing winner selection process...', 'info', 40);
+                addTerminalLine('$ Loading winner selection process replay...', 'info', 40);
             }
             
             fetch('/api/current_winner')
@@ -974,8 +1006,10 @@
                 .then(data => {
                     if (data.success && data.winner) {
                         setTimeout(() => {
-                            addTerminalLine('$ Winner Selection Process', 'success', 35);
+                            addTerminalLine('$ Winner Selection Process (Replay)', 'success', 35);
                             addTerminalLine(`$ Drawing Date: ${data.winner.drawing_date || 'N/A'}`, 'info', 30);
+                            addTerminalLine('', 'info', 0);
+                            addTerminalLine('$ Note: Selection happens automatically at 00:05 EST', 'data', 30);
                             addTerminalLine('', 'info', 0);
                             setTimeout(() => {
                                 addTerminalLine('$ Step 1: Fetching fresh leaderboard data...', 'info', 40);
@@ -1029,6 +1063,7 @@
                         setTimeout(() => {
                             addTerminalLine('$ No winner available', 'error', 40);
                             addTerminalLine('$ Next drawing: 00:05 EST', 'info', 40);
+                            addTerminalLine('$ Selection happens automatically', 'info', 40);
                         }, 1000);
                     }
                 });
