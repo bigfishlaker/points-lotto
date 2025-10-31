@@ -192,6 +192,40 @@ def api_qualified():
                                                  key=lambda x: x.get('total_points', 0), reverse=True), 1)]
     return jsonify({'success': True, 'qualified': qualified, 'total': len(qualified)})
 
+@app.route('/api/check_qualification')
+def api_check_qualification():
+    """Check if a specific user qualifies (baseline: 1+ point)"""
+    if not POINTSMARKET_ENABLED:
+        return jsonify({'error': 'Not available'}), 404
+    
+    username = request.args.get('username', '').strip().replace('@', '')
+    if not username:
+        return jsonify({'success': False, 'error': 'Username required'}), 400
+    
+    try:
+        users = points_scraper.get_leaderboard(limit=None)
+        user = next((u for u in users if u['username'].lower() == username.lower()), None)
+        
+        if user:
+            points = user.get('total_points', 0)
+            qualifies = points >= 1
+            return jsonify({
+                'success': True,
+                'username': user['username'],
+                'points': points,
+                'qualifies': qualifies,
+                'message': f"@{user['username']} {'✅ QUALIFIED' if qualifies else '❌ NOT QUALIFIED'} ({points} points)"
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'username': username,
+                'qualifies': False,
+                'message': f"@{username} not found on PointsMarket.io"
+            })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 @app.route('/api/select_winner', methods=['POST'])
 def api_select_winner():
     """Manually trigger winner selection"""

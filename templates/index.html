@@ -439,11 +439,20 @@
             <div class="leaderboard-card">
                 <div class="card-header">
                     <div class="card-title">Leaderboard</div>
-                    <div style="flex: 1; margin-left: 20px;">
+                    <div style="flex: 1; margin-left: 20px; display: flex; gap: 10px; align-items: center;">
                         <input type="text" id="searchInput" placeholder="Search username..." 
                                style="background: #0a0a0a; border: 1px solid #222; padding: 8px 12px; 
-                                      color: #fff; font-size: 13px; width: 300px; border-radius: 4px;"
+                                      color: #fff; font-size: 13px; width: 250px; border-radius: 4px;"
                                oninput="filterUsers()">
+                        <input type="text" id="checkQualInput" placeholder="Check qualification..." 
+                               style="background: #0a0a0a; border: 1px solid #222; padding: 8px 12px; 
+                                      color: #fff; font-size: 13px; width: 200px; border-radius: 4px;"
+                               onkeypress="if(event.key==='Enter') checkQualification()">
+                        <button onclick="checkQualification()" 
+                                style="background: #4CAF50; border: none; padding: 8px 16px; 
+                                       color: #fff; font-size: 13px; border-radius: 4px; cursor: pointer; font-weight: 600;">
+                            Check
+                        </button>
                     </div>
                 </div>
                 <div class="table-container">
@@ -453,6 +462,7 @@
                                 <th class="rank">#</th>
                                 <th>Username</th>
                                 <th style="text-align: right;">Points</th>
+                                <th style="text-align: center; width: 60px;">Status</th>
                             </tr>
                         </thead>
                         <tbody id="leaderboardBody">
@@ -472,6 +482,13 @@
                                     </div>
                                 </td>
                                 <td class="points" style="text-align: right;">{{ user.total_points }}</td>
+                                <td style="text-align: center;">
+                                    {% if user.total_points >= 1 %}
+                                    <span style="color: #4CAF50; font-size: 18px; font-weight: bold;" title="Qualified (1+ points)">✓</span>
+                                    {% else %}
+                                    <span style="color: #666;">-</span>
+                                    {% endif %}
+                                </td>
                             </tr>
                             {% endfor %}
                         </tbody>
@@ -699,6 +716,31 @@
         }
         
         // Initialize
+        // Qualification checker
+        function checkQualification() {
+            const input = document.getElementById('checkQualInput');
+            const username = input.value.trim().replace('@', '');
+            
+            if (!username) {
+                alert('Please enter a username');
+                return;
+            }
+            
+            fetch(`/api/check_qualification?username=${encodeURIComponent(username)}`)
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success) {
+                        const status = data.qualifies ? '✅ QUALIFIED' : '❌ NOT QUALIFIED';
+                        alert(`${data.message}\n\nPoints: ${data.points}\nStatus: ${status}`);
+                    } else {
+                        alert(data.message || data.error || 'User not found');
+                    }
+                })
+                .catch(err => {
+                    alert('Error checking qualification: ' + err.message);
+                });
+        }
+        
         loadTicker();
         updateCountdown();
         setInterval(updateCountdown, 1000);
