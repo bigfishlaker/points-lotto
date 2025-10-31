@@ -253,7 +253,7 @@ def index():
 @app.route('/api/current_winner')
 def api_current_winner():
     """Get current winner with RNG details"""
-    winner = db.get_current_winner()
+    winner = db.get_current_daily_winner()
         if winner:
             return jsonify({
                 'success': True,
