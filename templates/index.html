@@ -808,13 +808,12 @@
                              alt="{{ current_winner.username }}" 
                              style="width: 80px; height: 80px; border-radius: 50%; border: 3px solid #4CAF50; object-fit: cover; margin-bottom: 10px;"
                              onerror="this.src='https://abs.twimg.com/sticky/default_profile_images/default_profile_normal.png';">
-                        <div class="winner-name">@{{ current_winner.username }}</div>
+                        <a href="https://twitter.com/{{ current_winner.username }}" target="_blank" 
+                           style="color: #4CAF50; text-decoration: none; font-weight: 600; font-size: 18px;">
+                            @{{ current_winner.username }}
+                        </a>
                     </div>
                     <div class="winner-details">
-                        <div class="winner-detail">
-                            <div class="winner-detail-label">Points</div>
-                            <div class="winner-detail-value">{{ current_winner.points }}</div>
-                        </div>
                         <div class="winner-detail">
                             <div class="winner-detail-label">Date</div>
                             <div class="winner-detail-value">{{ current_winner.drawing_date }}</div>
@@ -837,7 +836,10 @@
                                      style="width: 32px; height: 32px; border-radius: 50%; margin-right: 12px; border: 2px solid #4CAF50; display: block;"
                                      onerror="this.src='https://abs.twimg.com/sticky/default_profile_images/default_profile_normal.png';">
                                 <div style="flex: 1; min-width: 0;">
-                                    <div style="font-size: 14px; color: #fff; font-weight: 600;">@{{ w.username }}</div>
+                                    <a href="https://twitter.com/{{ w.username }}" target="_blank" 
+                                       style="font-size: 14px; color: #fff; font-weight: 600; text-decoration: none; display: block;">
+                                        @{{ w.username }}
+                                    </a>
                                     <div style="font-size: 11px; color: #888; margin-top: 3px;">{{ w.drawing_date if w.drawing_date else 'N/A' }}</div>
                                 </div>
                                 <div style="font-size: 14px; color: #4CAF50; font-weight: 700;">WIN</div>
@@ -936,7 +938,10 @@
                                          style="width: 32px; height: 32px; border-radius: 50%; margin-right: 12px; border: 2px solid #4CAF50; display: block;"
                                          onerror="this.src='https://abs.twimg.com/sticky/default_profile_images/default_profile_normal.png';">
                                     <div style="flex: 1; min-width: 0;">
-                                        <div style="font-size: 14px; color: #fff; font-weight: 600;">@${w.username}</div>
+                                        <a href="https://twitter.com/${w.username}" target="_blank" 
+                                           style="font-size: 14px; color: #fff; font-weight: 600; text-decoration: none; display: block;">
+                                            @${w.username}
+                                        </a>
                                         <div style="font-size: 11px; color: #888; margin-top: 3px;">${date}</div>
                                     </div>
                                     <div style="font-size: 14px; color: #4CAF50; font-weight: 700;">WIN</div>
@@ -1193,10 +1198,23 @@
         // Initialize
         // Qualification checker with detailed stats modal
         function selectUser(username) {
+            // Just populate search box without filtering - show all users still
             const searchInput = document.getElementById('searchInput');
             if (searchInput) {
                 searchInput.value = username.replace('@', '');
-                filterUsers();
+                // Don't call filterUsers() - keep all users visible
+                // Instead, just highlight the row or scroll to it
+                const rows = document.querySelectorAll('#leaderboardBody tr');
+                rows.forEach(row => {
+                    const rowUsername = row.getAttribute('data-username') || '';
+                    if (rowUsername === username.toLowerCase()) {
+                        row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        row.style.background = '#1a3a1a';
+                        setTimeout(() => {
+                            row.style.background = '';
+                        }, 2000);
+                    }
+                });
             }
         }
         

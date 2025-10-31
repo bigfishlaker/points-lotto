@@ -214,22 +214,26 @@ def index():
             # Already past 00:05 today, so next is tomorrow
             next_midnight = (now_est + timedelta(days=1)).replace(hour=0, minute=5, second=0, microsecond=0)
         
-        # Get current winner
-        current_winner = db.get_current_daily_winner()
-        
         # Get all winners for the leaderboard - ensure we have a list
         try:
             all_winners = db.get_all_winners()
             if all_winners is None:
                 all_winners = []
             
-            # Sort by selected_at if available, otherwise drawing_date
+            # Sort by selected_at if available, otherwise drawing_date (chronological order)
             if all_winners:
                 def sort_key(w):
                     selected = w.get('selected_at') or ''
                     drawing = w.get('drawing_date') or ''
                     return selected if selected else drawing
                 all_winners = sorted(all_winners, key=sort_key)
+            
+            # Get most recent winner for current winner display (last in sorted list = most recent)
+            if all_winners:
+                current_winner = all_winners[-1]
+            else:
+                # Fallback to current winner from database if no winners yet
+                current_winner = db.get_current_daily_winner()
             
             print(f"Rendering page with {len(all_winners)} winners")
             if all_winners:
