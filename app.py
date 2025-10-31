@@ -419,6 +419,7 @@ def qualified_users():
         from datetime import datetime, timedelta
         
         # Always use baseline qualification: All users with 1+ point qualify
+        view = request.args.get('view', 'min1')  # Keep view parameter for template compatibility
         qualified = []
         is_baseline = True
         
