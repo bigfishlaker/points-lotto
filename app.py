@@ -74,7 +74,7 @@ def select_winner():
         ).hexdigest()[:16]
         
         # Save winner
-        success = db.record_winner(
+        success = db.record_daily_winner(
             winner['username'],
             winner['total_points'],
             today_str,
