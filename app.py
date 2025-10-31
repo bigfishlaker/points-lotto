@@ -160,12 +160,19 @@ def index():
         current_winner = db.get_current_winner()
         
         # Get all winners for the leaderboard - ensure we have a list
-        all_winners = db.get_all_winners()
-        if all_winners is None:
+        try:
+            all_winners = db.get_all_winners()
+            if all_winners is None:
+                all_winners = []
+            # Sort by selected_at if available, otherwise drawing_date
+            if all_winners:
+                all_winners = sorted(all_winners, key=lambda w: w.get('selected_at') or w.get('drawing_date') or '0000-00-00')
+            print(f"Rendering page with {len(all_winners)} winners")
+            if all_winners:
+                print(f"  Sample winner: {all_winners[0]}")
+        except Exception as e:
+            print(f"Error getting winners: {e}")
             all_winners = []
-        
-        # Debug: print winners count
-        print(f"Rendering page with {len(all_winners)} winners")
         
         return render_template('index.html',
                              qualified_users=qualified,
