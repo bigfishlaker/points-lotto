@@ -5,7 +5,7 @@ import time
 import random
 import hashlib
 import os
-from database_clean import DatabaseManager
+from database_clean import DatabaseManager as DatabaseManager
 
 # PointsMarket integration
 try:
@@ -93,7 +93,7 @@ def select_winner():
                 'random_seed': random_seed,
                 'selection_hash': selection_hash
             }
-        return None
+            return None
     except Exception as e:
         print(f"❌ Error selecting winner: {e}")
         return None
@@ -136,7 +136,7 @@ def index():
         return "PointsMarket integration not available", 404
     
     try:
-        # Get qualified users (all with 1+ point)
+        # Get qualified users (all with 1+ point) - ALL users
         users = points_scraper.get_leaderboard(limit=None)
         qualified = [u for u in users if u.get('total_points', 0) >= 1]
         qualified.sort(key=lambda x: x.get('total_points', 0), reverse=True)
@@ -153,7 +153,7 @@ def index():
         current_winner = db.get_current_winner()
         
         return render_template('index.html',
-                             qualified_users=qualified[:100],  # Top 100
+                             qualified_users=qualified,  # ALL users
                              total_qualified=len(qualified),
                              next_reset=next_midnight.isoformat(),
                              current_winner=current_winner)
@@ -162,10 +162,16 @@ def index():
 
 @app.route('/api/current_winner')
 def api_current_winner():
-    """Get current winner"""
+    """Get current winner with RNG details"""
     winner = db.get_current_winner()
-    if winner:
-        return jsonify({'success': True, 'winner': winner})
+        if winner:
+            return jsonify({
+                'success': True,
+                'winner': winner,
+            'total_eligible': winner.get('total_eligible'),
+                'random_seed': winner.get('random_seed'),
+                'selection_hash': winner.get('selection_hash')
+            })
     return jsonify({'success': False, 'winner': None})
 
 @app.route('/api/all_winners')

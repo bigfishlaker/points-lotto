@@ -190,12 +190,35 @@
         
         .username {
             font-weight: 600;
-            color: #fff;
+        }
+        
+        .username a {
+            color: #4CAF50;
+            text-decoration: none;
+            transition: color 0.2s;
+        }
+        
+        .username a:hover {
+            color: #66BB6A;
+            text-decoration: underline;
         }
         
         .points {
             color: #4CAF50;
             font-weight: 600;
+        }
+        
+        /* Search */
+        #searchInput {
+            outline: none;
+        }
+        
+        #searchInput:focus {
+            border-color: #4CAF50;
+        }
+        
+        tbody tr.hidden {
+            display: none;
         }
         
         /* Winner Card */
@@ -416,7 +439,12 @@
             <div class="leaderboard-card">
                 <div class="card-header">
                     <div class="card-title">Leaderboard</div>
-                    <div style="font-size: 13px; color: #888;">All users with 1+ point qualify</div>
+                    <div style="flex: 1; margin-left: 20px;">
+                        <input type="text" id="searchInput" placeholder="Search username..." 
+                               style="background: #0a0a0a; border: 1px solid #222; padding: 8px 12px; 
+                                      color: #fff; font-size: 13px; width: 300px; border-radius: 4px;"
+                               oninput="filterUsers()">
+                    </div>
                 </div>
                 <div class="table-container">
                     <table>
@@ -429,9 +457,14 @@
                         </thead>
                         <tbody id="leaderboardBody">
                             {% for user in qualified_users %}
-                            <tr>
+                            <tr data-username="{{ user.username|lower }}">
                                 <td class="rank">{{ user.rank }}</td>
-                                <td class="username">@{{ user.username }}</td>
+                                <td class="username">
+                                    <a href="https://twitter.com/{{ user.username }}" target="_blank" 
+                                       style="color: #4CAF50; text-decoration: none;">
+                                        @{{ user.username }}
+                                    </a>
+                                </td>
                                 <td class="points" style="text-align: right;">{{ user.total_points }}</td>
                             </tr>
                             {% endfor %}
@@ -628,6 +661,26 @@
             }
         });
         {% endif %}
+        
+        // Search/filter users
+        function filterUsers() {
+            const search = document.getElementById('searchInput').value.toLowerCase().trim();
+            const rows = document.querySelectorAll('#leaderboardBody tr');
+            
+            if (!search) {
+                rows.forEach(row => row.classList.remove('hidden'));
+                return;
+            }
+            
+            rows.forEach(row => {
+                const username = row.getAttribute('data-username') || '';
+                if (username.includes(search)) {
+                    row.classList.remove('hidden');
+                } else {
+                    row.classList.add('hidden');
+                }
+            });
+        }
         
         // Initialize
         loadTicker();
