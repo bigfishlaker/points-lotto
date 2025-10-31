@@ -150,9 +150,224 @@
             gap: 24px;
         }
         
+        /* Mobile Responsive Styles */
         @media (max-width: 968px) {
             .main-grid {
                 grid-template-columns: 1fr;
+            }
+        }
+        
+        @media (max-width: 768px) {
+            /* Container padding */
+            .container {
+                padding: 20px 16px;
+            }
+            
+            /* Header */
+            .header {
+                padding: 12px 0;
+            }
+            
+            .header-content {
+                padding: 8px 16px;
+            }
+            
+            .ascii-art {
+                font-size: 4px;
+            }
+            
+            .ascii-subtitle {
+                font-size: 8px;
+            }
+            
+            /* Stats grid - single column on mobile */
+            .stats-grid {
+                grid-template-columns: 1fr;
+                gap: 12px;
+                margin-bottom: 24px;
+            }
+            
+            .stat-card {
+                padding: 16px;
+            }
+            
+            .stat-value {
+                font-size: 28px;
+            }
+            
+            /* Main grid gap */
+            .main-grid {
+                gap: 16px;
+            }
+            
+            /* Card headers */
+            .card-header {
+                padding: 16px;
+                flex-wrap: wrap;
+                gap: 12px;
+            }
+            
+            .card-title {
+                font-size: 16px;
+            }
+            
+            /* Table adjustments */
+            th, td {
+                padding: 10px 12px;
+                font-size: 13px;
+            }
+            
+            .rank {
+                width: 40px;
+            }
+            
+            /* Search bar - stack on mobile */
+            .card-header {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+            
+            .card-header > div:last-child {
+                width: 100%;
+                margin-left: 0;
+                margin-top: 12px;
+            }
+            
+            #searchInput {
+                width: 100%;
+                min-width: 0;
+            }
+            
+            /* Button full width on mobile */
+            .card-header button {
+                width: 100%;
+            }
+            
+            /* Winner card */
+            .winner-card {
+                padding: 16px;
+                margin-bottom: 16px;
+            }
+            
+            .winner-name {
+                font-size: 22px;
+            }
+            
+            .winner-details {
+                flex-direction: column;
+                gap: 12px;
+            }
+            
+            /* Countdown */
+            .countdown-card {
+                padding: 16px;
+            }
+            
+            .countdown-time {
+                font-size: 28px;
+            }
+            
+            /* Winners ticker - smaller font */
+            .winner-item {
+                font-size: 12px;
+                margin-right: 24px;
+            }
+            
+            .winner-chip {
+                padding: 3px 8px;
+                font-size: 11px;
+            }
+        }
+        
+        @media (max-width: 480px) {
+            /* Extra small phones */
+            .container {
+                padding: 16px 12px;
+            }
+            
+            .header-content {
+                padding: 8px 12px;
+            }
+            
+            .ascii-art {
+                font-size: 3px;
+            }
+            
+            .stat-card {
+                padding: 12px;
+            }
+            
+            .stat-value {
+                font-size: 24px;
+            }
+            
+            .card-header {
+                padding: 12px;
+            }
+            
+            th, td {
+                padding: 8px 10px;
+                font-size: 12px;
+            }
+            
+            .rank {
+                width: 35px;
+                font-size: 11px;
+            }
+            
+            .winner-card {
+                padding: 12px;
+            }
+            
+            .countdown-time {
+                font-size: 24px;
+            }
+            
+            /* Table - make more compact */
+            .table-container {
+                max-height: 400px;
+            }
+            
+            /* Winner item in ticker - even smaller */
+            .winner-item {
+                font-size: 11px;
+                gap: 6px;
+                margin-right: 16px;
+            }
+            
+            /* Winner card image smaller on mobile */
+            .winner-card img {
+                width: 60px !important;
+                height: 60px !important;
+            }
+            
+            /* Winners leaderboard items - more compact */
+            #winnersLeaderboard > div {
+                padding: 8px 0 !important;
+            }
+            
+            #winnersLeaderboard img {
+                width: 24px !important;
+                height: 24px !important;
+            }
+            
+            /* Modals - full width on small screens */
+            .rng-terminal-content,
+            .qual-stats-content {
+                width: 95%;
+                max-height: 90vh;
+                margin: 10px;
+            }
+            
+            .rng-terminal-header,
+            .qual-stats-header {
+                padding: 12px;
+            }
+            
+            .rng-terminal-body,
+            .qual-stats-body {
+                padding: 12px;
+                font-size: 11px;
             }
         }
         
@@ -697,15 +912,15 @@
             <div class="leaderboard-card">
                 <div class="card-header">
                     <div class="card-title">Leaderboard</div>
-                    <div style="flex: 1; margin-left: 20px; display: flex; gap: 10px; align-items: center;">
+                    <div style="flex: 1; margin-left: 20px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
                         <input type="text" id="searchInput" placeholder="Search username (Enter to check stats)..." 
                                style="background: #0a0a0a; border: 1px solid #222; padding: 8px 12px; 
-                                      color: #fff; font-size: 13px; width: 350px; border-radius: 4px;"
+                                      color: #fff; font-size: 13px; flex: 1; min-width: 200px; border-radius: 4px;"
                                oninput="filterUsers()"
                                onkeypress="if(event.key==='Enter') checkQualification()">
                         <button onclick="checkQualification()" 
                                 style="background: #4CAF50; border: none; padding: 8px 16px; 
-                                       color: #fff; font-size: 13px; border-radius: 4px; cursor: pointer; font-weight: 600;">
+                                       color: #fff; font-size: 13px; border-radius: 4px; cursor: pointer; font-weight: 600; white-space: nowrap;">
                             Check Stats
                         </button>
                     </div>
