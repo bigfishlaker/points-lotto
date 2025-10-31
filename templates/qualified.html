@@ -117,6 +117,45 @@
         .logo a:hover {
             color: #e8e8e8;
         }
+
+        /* Winners Ticker */
+        .winners-ticker {
+            width: 100%;
+            overflow: hidden;
+            border-bottom: 1px solid #222;
+            background: #0f0f0f;
+            margin-bottom: 12px;
+        }
+        .winners-ticker-track {
+            display: inline-block;
+            white-space: nowrap;
+            padding: 8px 0;
+            animation: scroll-left 35s linear infinite;
+        }
+        .winner-item {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            color: #ccc;
+            font-size: 13px;
+            margin-right: 28px;
+        }
+        .winner-chip {
+            background: #1a1a1a;
+            border: 1px solid #2a2a2a;
+            padding: 3px 8px;
+            border-radius: 999px;
+            color: #e8e8e8;
+            font-weight: 600;
+        }
+        .winner-date {
+            color: #777;
+            font-size: 12px;
+        }
+        @keyframes scroll-left {
+            0% { transform: translateX(0); }
+            100% { transform: translateX(-50%); }
+        }
         
         .container {
             max-width: 1400px;
@@ -985,6 +1024,10 @@
             </div>
             
             <div class="container">
+                <!-- Wall of Fame - Winners Ticker -->
+                <div id="winnersTicker" class="winners-ticker" style="display:none;">
+                    <div class="winners-ticker-track" id="winnersTickerTrack"></div>
+                </div>
         <!-- Unified content area -->
         <div class="main-content-area">
             <!-- Top section: Stats and Controls -->
@@ -1141,6 +1184,34 @@
             }
         } catch(e) {
             nextResetTime = calculateNextSixHourSlotEST();
+        }
+
+        // Load winners for Wall of Fame ticker
+        function loadWinnersTicker() {
+            const ticker = document.getElementById('winnersTicker');
+            const track = document.getElementById('winnersTickerTrack');
+            if (!ticker || !track) return;
+            
+            fetch('/api/all_winners')
+                .then(r => r.json())
+                .then(data => {
+                    if (!data.success || !data.winners || data.winners.length === 0) {
+                        ticker.style.display = 'none';
+                        return;
+                    }
+                    // Build items
+                    const items = data.winners.map(w => {
+                        const date = (w.selected_at || w.drawing_date || '').split(' ')[0] || '';
+                        return `<span class="winner-item"><span class="winner-chip">@${w.username}</span><span>won</span><span class="winner-chip">${w.points || 0} pts</span><span class="winner-date">${date}</span></span>`;
+                    }).join('');
+                    // Duplicate for seamless scroll
+                    track.innerHTML = items + items;
+                    ticker.style.display = 'block';
+                })
+                .catch(() => {
+                    // Hide on error
+                    ticker.style.display = 'none';
+                });
         }
         
         function fillSearchBar(username) {
@@ -1903,11 +1974,16 @@
             // Create snow animation immediately
             createSnow();
             
-            // Start countdown if in gain24 view
+            // Update period text to 6-hour schedule
+            const subtitle = document.getElementById('periodSubtitle');
+            if (subtitle) subtitle.textContent = 'Drawing every 6 hours at :05 EST';
+            
+            // Start countdown to next 6-hour slot
             updateCountdownVisibility();
             
             // Load current winner on page load
             loadCurrentWinner();
+            loadWinnersTicker();
             
             // Auto-refresh qualified users count every 5 minutes
             autoRefreshInterval = setInterval(() => {
