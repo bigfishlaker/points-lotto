@@ -28,6 +28,64 @@ _scheduler_running = False
 _scheduler_thread = None
 _winner_selection_lock = threading.Lock()
 
+def init_database_with_winners():
+    """Initialize database and add initial winners if empty"""
+    try:
+        winners = db.get_all_winners()
+        print(f"Database has {len(winners)} existing winners")
+        
+        if len(winners) == 0:
+            print("Initializing database with initial winners...")
+            from datetime import datetime
+            
+            initial_winners = [
+                {
+                    'username': 'doomercorp',
+                    'points': 100,
+                    'drawing_date': '2025-10-29',
+                    'selected_at': datetime(2025, 10, 29, 0, 5, 0).isoformat(),
+                    'total_eligible': 920,
+                    'random_seed': 12345,
+                    'selection_hash': 'abc123def456',
+                },
+                {
+                    'username': 'noobysol',
+                    'points': 150,
+                    'drawing_date': '2025-10-28',
+                    'selected_at': datetime(2025, 10, 28, 0, 5, 0).isoformat(),
+                    'total_eligible': 900,
+                    'random_seed': 67890,
+                    'selection_hash': 'def456ghi789',
+                }
+            ]
+            
+            for winner in initial_winners:
+                success = db.record_daily_winner(
+                    winner['username'],
+                    winner['points'],
+                    winner['drawing_date'],
+                    total_eligible=winner['total_eligible'],
+                    random_seed=winner['random_seed'],
+                    selection_hash=winner['selection_hash']
+                )
+                if success:
+                    print(f"  Added initial winner: @{winner['username']}")
+                else:
+                    print(f"  Failed to add: @{winner['username']} (may already exist)")
+            
+            # Verify
+            winners = db.get_all_winners()
+            print(f"Database now has {len(winners)} winners")
+        else:
+            print(f"Database already initialized with {len(winners)} winners")
+    except Exception as e:
+        print(f"Error initializing database: {e}")
+        import traceback
+        traceback.print_exc()
+
+# Initialize database on module import (works for both dev and production)
+init_database_with_winners()
+
 def get_est_now():
     """Get current time in EST/EDT"""
     est = timezone(timedelta(hours=-5))
