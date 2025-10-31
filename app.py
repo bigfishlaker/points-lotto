@@ -164,8 +164,8 @@ def index():
 def api_current_winner():
     """Get current winner with RNG details"""
     winner = db.get_current_winner()
-        if winner:
-            return jsonify({
+    if winner:
+        return jsonify({
                 'success': True,
                 'winner': winner,
             'total_eligible': winner.get('total_eligible'),
@@ -229,7 +229,7 @@ def api_check_qualification():
                 print(f"Error fetching transactions for {username}: {e}")
             
             # Return detailed stats from PointsMarket
-            return jsonify({
+        return jsonify({
                 'success': True,
                 'username': user['username'],
                 'total_points': points,
@@ -243,7 +243,7 @@ def api_check_qualification():
                 'message': f"@{user['username']} {'✅ QUALIFIED' if qualifies else '❌ NOT QUALIFIED'} ({points} points)"
             })
         else:
-            return jsonify({
+        return jsonify({
                 'success': False,
                 'username': username,
                 'qualifies': False,
@@ -258,7 +258,7 @@ def api_select_winner():
     with _winner_selection_lock:
         result = select_winner()
         if result:
-            return jsonify({'success': True, 'winner': result})
+        return jsonify({'success': True, 'winner': result})
         return jsonify({'success': False, 'error': 'Failed or already exists'}), 400
 
 # Start scheduler
