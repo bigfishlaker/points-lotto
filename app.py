@@ -30,10 +30,10 @@ _winner_selection_lock = threading.Lock()
 
 def get_est_now():
     """Get current time in EST/EDT"""
-        est = timezone(timedelta(hours=-5))
-        edt = timezone(timedelta(hours=-4))
-        now_utc = datetime.now(timezone.utc)
-        is_dst = now_utc.month >= 3 and now_utc.month < 11
+    est = timezone(timedelta(hours=-5))
+    edt = timezone(timedelta(hours=-4))
+    now_utc = datetime.now(timezone.utc)
+    is_dst = now_utc.month >= 3 and now_utc.month < 11
     return now_utc.astimezone(edt if is_dst else est)
 
 def select_winner():
