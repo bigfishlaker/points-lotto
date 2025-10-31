@@ -1302,10 +1302,9 @@
         });
         
         loadTicker();
+        loadWinnersLeaderboard();
         updateCountdown();
         setInterval(updateCountdown, 1000);
-        loadTicker();
-        loadWinnersLeaderboard();
         setInterval(loadTicker, 300000); // Refresh ticker every 5 min
         setInterval(loadWinnersLeaderboard, 300000); // Refresh leaderboard every 5 min
         
