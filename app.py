@@ -5,7 +5,7 @@ import time
 import random
 import hashlib
 import os
-from database_clean import DatabaseManager
+from database import DatabaseManager
 
 # PointsMarket integration
 try:
