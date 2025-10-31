@@ -404,6 +404,224 @@
             0%, 50% { opacity: 1; }
             51%, 100% { opacity: 0; }
         }
+        
+        /* Qualification Stats Modal */
+        .qual-stats-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            z-index: 10000;
+            background: rgba(0, 0, 0, 0.85);
+            backdrop-filter: blur(4px);
+        }
+        
+        .qual-stats-modal.active {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .qual-stats-content {
+            background: #111;
+            border: 1px solid #333;
+            border-radius: 8px;
+            width: 90%;
+            max-width: 500px;
+            padding: 24px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .qual-stats-content::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(135deg, rgba(76, 175, 80, 0.05) 0%, rgba(76, 175, 80, 0.02) 100%);
+            pointer-events: none;
+            z-index: 0;
+        }
+        
+        .qual-stats-tweet-background {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            opacity: 0.03;
+            z-index: 0;
+            padding: 40px;
+            font-size: 24px;
+            line-height: 1.8;
+            word-wrap: break-word;
+            color: #4CAF50;
+            font-style: italic;
+            overflow: hidden;
+            pointer-events: none;
+        }
+        
+        .qual-stats-content > * {
+            position: relative;
+            z-index: 1;
+        }
+        
+        .qual-stats-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 16px;
+            border-bottom: 1px solid #222;
+        }
+        
+        .qual-stats-title {
+            font-size: 18px;
+            font-weight: 700;
+            color: #fff;
+        }
+        
+        .qual-stats-close {
+            background: none;
+            border: none;
+            color: #888;
+            font-size: 24px;
+            cursor: pointer;
+            padding: 0;
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .qual-stats-close:hover {
+            color: #fff;
+        }
+        
+        .qual-stats-body {
+            color: #ccc;
+        }
+        
+        .qual-stats-user {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+        
+        .qual-stats-user img {
+            width: 64px;
+            height: 64px;
+            border-radius: 50%;
+            border: 2px solid #4CAF50;
+        }
+        
+        .qual-stats-info {
+            flex: 1;
+        }
+        
+        .qual-stats-username {
+            font-size: 20px;
+            font-weight: 700;
+            color: #4CAF50;
+            margin-bottom: 4px;
+        }
+        
+        .qual-stats-status {
+            font-size: 14px;
+            color: #888;
+        }
+        
+        .qual-stats-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+            margin-top: 20px;
+        }
+        
+        .qual-stat-item {
+            background: #0a0a0a;
+            border: 1px solid #222;
+            padding: 12px;
+            border-radius: 4px;
+        }
+        
+        .qual-stat-label {
+            font-size: 11px;
+            color: #666;
+            text-transform: uppercase;
+            margin-bottom: 4px;
+        }
+        
+        .qual-stat-value {
+            font-size: 18px;
+            font-weight: 700;
+            color: #fff;
+        }
+        
+        .qual-stat-value.qualified {
+            color: #4CAF50;
+        }
+        
+        /* Arcade Button */
+        .arcade-button {
+            width: 100%;
+            padding: 24px;
+            background: linear-gradient(135deg, #dc2626 0%, #991b1b 100%);
+            border: 4px solid #7f1d1d;
+            border-radius: 12px;
+            color: #fff;
+            font-size: 20px;
+            font-weight: 900;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            cursor: pointer;
+            box-shadow: 
+                0 8px 16px rgba(0, 0, 0, 0.4),
+                inset 0 2px 4px rgba(255, 255, 255, 0.2),
+                inset 0 -4px 8px rgba(0, 0, 0, 0.3);
+            transition: all 0.2s;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .arcade-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 
+                0 12px 24px rgba(0, 0, 0, 0.5),
+                inset 0 2px 4px rgba(255, 255, 255, 0.3),
+                inset 0 -4px 8px rgba(0, 0, 0, 0.4);
+            background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+        }
+        
+        .arcade-button:active {
+            transform: translateY(0);
+            box-shadow: 
+                0 4px 8px rgba(0, 0, 0, 0.3),
+                inset 0 4px 8px rgba(0, 0, 0, 0.3);
+        }
+        
+        .arcade-button::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+            transition: left 0.5s;
+        }
+        
+        .arcade-button:hover::before {
+            left: 100%;
+        }
     </style>
 </head>
 <body>
@@ -528,6 +746,24 @@
                     <div class="countdown-label">Until Next Drawing</div>
                     <div style="font-size: 11px; color: #666; margin-top: 8px;">Next: 00:05 EST</div>
                 </div>
+                
+                <!-- Arcade Button -->
+                <button class="arcade-button" onclick="showRngTerminal(); showWinnerProcess();" style="margin-top: 20px;">
+                    🎰 Select Winner
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Qualification Stats Modal -->
+    <div id="qualStatsModal" class="qual-stats-modal">
+        <div class="qual-stats-content">
+            <div class="qual-stats-header">
+                <div class="qual-stats-title">📊 PointsMarket Stats</div>
+                <button class="qual-stats-close" onclick="closeQualStats()">✕</button>
+            </div>
+            <div class="qual-stats-body" id="qualStatsBody">
+                <!-- Stats will be populated by JavaScript -->
             </div>
         </div>
     </div>
@@ -716,7 +952,7 @@
         }
         
         // Initialize
-        // Qualification checker
+        // Qualification checker with detailed stats modal
         function checkQualification() {
             const input = document.getElementById('checkQualInput');
             const username = input.value.trim().replace('@', '');
@@ -730,8 +966,7 @@
                 .then(r => r.json())
                 .then(data => {
                     if (data.success) {
-                        const status = data.qualifies ? '✅ QUALIFIED' : '❌ NOT QUALIFIED';
-                        alert(`${data.message}\n\nPoints: ${data.points}\nStatus: ${status}`);
+                        showQualStats(data);
                     } else {
                         alert(data.message || data.error || 'User not found');
                     }
@@ -740,6 +975,111 @@
                     alert('Error checking qualification: ' + err.message);
                 });
         }
+        
+        function showQualStats(data) {
+            const modal = document.getElementById('qualStatsModal');
+            const content = document.querySelector('.qual-stats-content');
+            const body = document.getElementById('qualStatsBody');
+            
+            const statusText = data.qualifies ? '✅ QUALIFIED' : '❌ NOT QUALIFIED';
+            const statusColor = data.qualifies ? '#4CAF50' : '#f44336';
+            
+            // Add tweet background if available
+            let tweetBackground = '';
+            if (data.last_tweet && data.last_tweet.text) {
+                tweetBackground = `<div class="qual-stats-tweet-background">${escapeHtml(data.last_tweet.text)}</div>`;
+            }
+            
+            // Update content with tweet background
+            if (content && !content.querySelector('.qual-stats-tweet-background')) {
+                const bgDiv = document.createElement('div');
+                bgDiv.className = 'qual-stats-tweet-background';
+                if (data.last_tweet && data.last_tweet.text) {
+                    bgDiv.textContent = data.last_tweet.text;
+                }
+                content.insertBefore(bgDiv, content.firstChild);
+            } else if (content && content.querySelector('.qual-stats-tweet-background') && data.last_tweet && data.last_tweet.text) {
+                content.querySelector('.qual-stats-tweet-background').textContent = data.last_tweet.text;
+            }
+            
+            body.innerHTML = `
+                <div class="qual-stats-user">
+                    <img src="https://unavatar.io/twitter/${data.username}" 
+                         alt="${data.username}" 
+                         onerror="this.src='https://abs.twimg.com/sticky/default_profile_images/default_profile_normal.png';">
+                    <div class="qual-stats-info">
+                        <div class="qual-stats-username">@${data.username}</div>
+                        <div class="qual-stats-status" style="color: ${statusColor};">${statusText}</div>
+                    </div>
+                </div>
+                <div class="qual-stats-grid">
+                    <div class="qual-stat-item">
+                        <div class="qual-stat-label">Total Points</div>
+                        <div class="qual-stat-value ${data.qualifies ? 'qualified' : ''}" style="color: ${statusColor};">${data.total_points || 0}</div>
+                    </div>
+                    <div class="qual-stat-item">
+                        <div class="qual-stat-label">Rank</div>
+                        <div class="qual-stat-value">#${data.rank || 'N/A'}</div>
+                    </div>
+                    <div class="qual-stat-item">
+                        <div class="qual-stat-label">Upvotes</div>
+                        <div class="qual-stat-value">${data.upvotes || 0}</div>
+                    </div>
+                    <div class="qual-stat-item">
+                        <div class="qual-stat-label">Downvotes</div>
+                        <div class="qual-stat-value">${data.downvotes || 0}</div>
+                    </div>
+                    <div class="qual-stat-item">
+                        <div class="qual-stat-label">Transactions</div>
+                        <div class="qual-stat-value">${data.transactions || 0}</div>
+                    </div>
+                    <div class="qual-stat-item">
+                        <div class="qual-stat-label">Badges</div>
+                        <div class="qual-stat-value">${(data.badges && data.badges.length > 0) ? data.badges.length : 0}</div>
+                    </div>
+                </div>
+                ${(data.badges && data.badges.length > 0) ? `
+                    <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid #222;">
+                        <div class="qual-stat-label" style="margin-bottom: 8px;">Badge List</div>
+                        <div style="color: #888; font-size: 13px;">${data.badges.join(', ') || 'None'}</div>
+                    </div>
+                ` : ''}
+                ${(data.last_tweet && data.last_tweet.text) ? `
+                    <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid #222;">
+                        <div class="qual-stat-label" style="margin-bottom: 8px;">Last Tweet That Earned Points</div>
+                        <div style="color: #888; font-size: 13px; line-height: 1.6;">${escapeHtml(data.last_tweet.text)}</div>
+                        ${data.last_tweet.tweet_id ? `
+                            <a href="https://twitter.com/${data.username}/status/${data.last_tweet.tweet_id}" 
+                               target="_blank" 
+                               style="color: #4CAF50; font-size: 12px; text-decoration: none; margin-top: 8px; display: inline-block;">
+                                View Tweet →
+                            </a>
+                        ` : ''}
+                    </div>
+                ` : ''}
+            `;
+            
+            modal.classList.add('active');
+        }
+        
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+        
+        function closeQualStats() {
+            document.getElementById('qualStatsModal').classList.remove('active');
+            document.getElementById('checkQualInput').value = '';
+        }
+        
+        // Close modal on outside click
+        document.addEventListener('click', function(e) {
+            const modal = document.getElementById('qualStatsModal');
+            if (e.target === modal) {
+                closeQualStats();
+            }
+        });
         
         loadTicker();
         updateCountdown();

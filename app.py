@@ -30,10 +30,10 @@ _winner_selection_lock = threading.Lock()
 
 def get_est_now():
     """Get current time in EST/EDT"""
-    est = timezone(timedelta(hours=-5))
-    edt = timezone(timedelta(hours=-4))
-    now_utc = datetime.now(timezone.utc)
-    is_dst = now_utc.month >= 3 and now_utc.month < 11
+        est = timezone(timedelta(hours=-5))
+        edt = timezone(timedelta(hours=-4))
+        now_utc = datetime.now(timezone.utc)
+        is_dst = now_utc.month >= 3 and now_utc.month < 11
     return now_utc.astimezone(edt if is_dst else est)
 
 def select_winner():
@@ -93,7 +93,7 @@ def select_winner():
                 'random_seed': random_seed,
                 'selection_hash': selection_hash
             }
-        return None
+            return None
     except Exception as e:
         print(f"Error selecting winner: {e}")
         return None
@@ -128,7 +128,7 @@ def daily_scheduler():
         except Exception as e:
             print(f"Scheduler error: {e}")
             time.sleep(60)
-
+            
 @app.route('/')
 def index():
     """Main page - shows qualified users and current winner"""
@@ -164,13 +164,13 @@ def index():
 def api_current_winner():
     """Get current winner with RNG details"""
     winner = db.get_current_winner()
-    if winner:
-        return jsonify({
-            'success': True,
-            'winner': winner,
+        if winner:
+            return jsonify({
+                'success': True,
+                'winner': winner,
             'total_eligible': winner.get('total_eligible'),
-            'random_seed': winner.get('random_seed'),
-            'selection_hash': winner.get('selection_hash')
+                'random_seed': winner.get('random_seed'),
+                'selection_hash': winner.get('selection_hash')
         })
     return jsonify({'success': False, 'winner': None})
 
@@ -194,7 +194,7 @@ def api_qualified():
 
 @app.route('/api/check_qualification')
 def api_check_qualification():
-    """Check if a specific user qualifies (baseline: 1+ point)"""
+    """Check if a specific user qualifies and return detailed PointsMarket stats"""
     if not POINTSMARKET_ENABLED:
         return jsonify({'error': 'Not available'}), 404
     
@@ -209,10 +209,36 @@ def api_check_qualification():
         if user:
             points = user.get('total_points', 0)
             qualifies = points >= 1
+            
+            # Get last transaction/tweet that earned points
+            last_tweet = None
+            try:
+                transactions = points_scraper.get_user_transactions(username)
+                if transactions:
+                    # Find the most recent transaction that earned points
+                    for trans in sorted(transactions, key=lambda x: x.get('created_at', ''), reverse=True):
+                        if trans.get('points', 0) > 0 or trans.get('type') == 'earned':
+                            last_tweet = {
+                                'text': trans.get('description', trans.get('text', '')),
+                                'tweet_id': trans.get('tweet_id', ''),
+                                'created_at': trans.get('created_at', ''),
+                                'points': trans.get('points', 1)
+                            }
+                            break
+            except Exception as e:
+                print(f"Error fetching transactions for {username}: {e}")
+            
+            # Return detailed stats from PointsMarket
             return jsonify({
                 'success': True,
                 'username': user['username'],
-                'points': points,
+                'total_points': points,
+                'rank': user.get('rank', 0),
+                'upvotes': user.get('upvotes', 0),
+                'downvotes': user.get('downvotes', 0),
+                'transactions': user.get('transactions', 0),
+                'badges': user.get('badges', []),
+                'last_tweet': last_tweet,
                 'qualifies': qualifies,
                 'message': f"@{user['username']} {'✅ QUALIFIED' if qualifies else '❌ NOT QUALIFIED'} ({points} points)"
             })
