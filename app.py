@@ -40,22 +40,22 @@ def init_database_with_winners():
             
             initial_winners = [
                 {
-                    'username': 'doomercorp',
-                    'points': 100,
-                    'drawing_date': '2025-10-29',
-                    'selected_at': datetime(2025, 10, 29, 0, 5, 0).isoformat(),
-                    'total_eligible': 920,
-                    'random_seed': 12345,
-                    'selection_hash': 'abc123def456',
-                },
-                {
                     'username': 'noobysol',
-                    'points': 150,
+                    'points': 1,  # First winner gets 1 point
                     'drawing_date': '2025-10-28',
                     'selected_at': datetime(2025, 10, 28, 0, 5, 0).isoformat(),
                     'total_eligible': 900,
                     'random_seed': 67890,
                     'selection_hash': 'def456ghi789',
+                },
+                {
+                    'username': 'doomercorp',
+                    'points': 2,  # Second winner gets 2 points
+                    'drawing_date': '2025-10-29',
+                    'selected_at': datetime(2025, 10, 29, 0, 5, 0).isoformat(),
+                    'total_eligible': 920,
+                    'random_seed': 12345,
+                    'selection_hash': 'abc123def456',
                 }
             ]
             
@@ -127,14 +127,18 @@ def select_winner():
         winner = random.choice(qualified)
         random.seed()
         
+        # Calculate lottery points: sequential based on winner count (1, 2, 3, 4, ...)
+        all_winners = db.get_all_winners()
+        lottery_points = len(all_winners) + 1
+        
         selection_hash = hashlib.sha256(
-            f"{today_str}{winner['username']}{winner['total_points']}{random_seed}".encode()
+            f"{today_str}{winner['username']}{lottery_points}{random_seed}".encode()
         ).hexdigest()[:16]
         
-        # Save winner
+        # Save winner with lottery points (not their PointsMarket points)
         success = db.record_daily_winner(
             winner['username'],
-            winner['total_points'],
+            lottery_points,  # Use sequential lottery points, not PointsMarket points
             today_str,
             total_eligible=len(qualified),
             random_seed=random_seed,
@@ -142,10 +146,10 @@ def select_winner():
         )
         
         if success:
-            print(f"Winner: @{winner['username']} ({winner['total_points']} pts)")
+            print(f"Winner: @{winner['username']} (lottery points: {lottery_points})")
             return {
                 'username': winner['username'],
-                'points': winner['total_points'],
+                'points': lottery_points,
                 'drawing_date': today_str,
                 'total_eligible': len(qualified),
                 'random_seed': random_seed,
