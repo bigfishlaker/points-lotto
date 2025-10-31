@@ -17,6 +17,8 @@
             color: #fff;
             min-height: 100vh;
             padding: 0;
+            -webkit-overflow-scrolling: touch;
+            overflow-x: hidden;
         }
         
         /* Header */
@@ -212,6 +214,13 @@
             }
             
             /* Table adjustments */
+            .table-container {
+                -webkit-overflow-scrolling: touch;
+                touch-action: pan-y pan-x;
+                overflow-x: auto;
+                overflow-y: auto;
+            }
+            
             th, td {
                 padding: 10px 12px;
                 font-size: 13px;
@@ -221,26 +230,61 @@
                 width: 40px;
             }
             
+            /* Ensure buttons and inputs are clickable */
+            button, input, a {
+                -webkit-tap-highlight-color: rgba(76, 175, 80, 0.3);
+                touch-action: manipulation;
+                cursor: pointer;
+            }
+            
+            /* Fix for leaderboard being accessible */
+            .leaderboard-card {
+                position: relative;
+                z-index: 1;
+            }
+            
             /* Search bar - stack on mobile */
             .card-header {
                 flex-direction: column;
                 align-items: flex-start;
+                position: relative;
+                z-index: 10;
             }
             
             .card-header > div:last-child {
                 width: 100%;
                 margin-left: 0;
                 margin-top: 12px;
+                position: relative;
+                z-index: 11;
             }
             
             #searchInput {
                 width: 100%;
                 min-width: 0;
+                position: relative;
+                z-index: 12;
+            }
+            
+            /* Ensure card header button is accessible */
+            .card-header button {
+                position: relative;
+                z-index: 12;
             }
             
             /* Button full width on mobile */
             .card-header button {
                 width: 100%;
+                -webkit-tap-highlight-color: rgba(76, 175, 80, 0.3);
+                touch-action: manipulation;
+                min-height: 44px; /* Minimum touch target size */
+            }
+            
+            /* Ensure search input is tappable */
+            #searchInput {
+                -webkit-tap-highlight-color: rgba(76, 175, 80, 0.3);
+                touch-action: manipulation;
+                min-height: 44px; /* Minimum touch target size */
             }
             
             /* Winner card */
@@ -326,6 +370,15 @@
             /* Table - make more compact */
             .table-container {
                 max-height: 400px;
+                -webkit-overflow-scrolling: touch;
+                touch-action: pan-y pan-x;
+            }
+            
+            /* Ensure table rows are tappable */
+            tbody tr {
+                -webkit-tap-highlight-color: rgba(76, 175, 80, 0.2);
+                touch-action: manipulation;
+                min-height: 44px;
             }
             
             /* Winner item in ticker - even smaller */
@@ -396,6 +449,8 @@
             overflow-x: auto;
             overflow-y: auto;
             max-height: 600px;
+            -webkit-overflow-scrolling: touch; /* Smooth scrolling on iOS */
+            touch-action: pan-y pan-x; /* Allow touch scrolling */
         }
         
         table {
