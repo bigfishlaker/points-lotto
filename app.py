@@ -137,83 +137,38 @@ def dashboard():
         # Fetch FRESH live data for initial display
         current_users = points_scraper.get_leaderboard(limit=None)
         
-        # Get last winner's snapshot for round-based qualification
-        last_snapshot_date = db.get_last_winner_snapshot_date()
+        # Always use baseline qualification: All users with 1+ point qualify
         qualified = []
-        is_baseline = False
+        is_baseline = True
         
-        if last_snapshot_date:
-            # Round-based: show ALL users, mark only those who gained +1 as qualified
-            tracker = DailyPointsTracker()
-            previous_snapshot = tracker.load_snapshot(last_snapshot_date)
-            
-            if previous_snapshot:
-                current_dict = {u['username']: u for u in current_users}
-                previous_users = previous_snapshot.get('users', {})
-                
-                # Check if snapshot has actual user data
-                if previous_users and len(previous_users) > 0:
-                    # We have a valid snapshot with user data
-                    for username in current_dict:
-                        current_user = current_dict[username]
-                        current_points = current_user.get('total_points', 0)
-                        qualifies = False
-                        gain = 0
-                        baseline = 0
-                        
-                        if username in previous_users:
-                            previous_points = previous_users[username].get('total_points', 0)
-                            gain = current_points - previous_points
-                            baseline = previous_points
-                            if gain >= 1 and current_points >= 1:
-                                qualifies = True
-                        else:
-                            # New user
-                            if current_points >= 1:
-                                gain = current_points
-                                qualifies = True
-                        
-                        qualified.append({
-                            'username': username,
-                            'total_points': current_points,
-                            'gain': gain,
-                            'baseline': baseline,
-                            'qualifies': qualifies
-                        })
-                else:
-                    # Snapshot exists but is empty - treat as baseline
-                    for user in current_users:
-                        current_points = user.get('total_points', 0)
-                        if current_points >= 1:
-                            qualified.append({
-                                'username': user['username'],
-                                'total_points': current_points,
-                                'gain': 0,
-                                'baseline': 0,
-                                'qualifies': True
-                            })
-        else:
-            # No previous snapshot - show all users with all marked as qualified for initial display
-            for user in current_users:
-                current_points = user.get('total_points', 0)
-                if current_points >= 1:  # Only show users with at least 1 point
-                    qualified.append({
-                        'username': user['username'],
-                        'total_points': current_points,
-                        'gain': 0,
-                        'baseline': 0,
-                        'qualifies': True
-                    })
+        for user in current_users:
+            current_points = user.get('total_points', 0)
+            if current_points >= 1:  # All users with at least 1 point qualify
+                qualified.append({
+                    'username': user['username'],
+                    'total_points': current_points,
+                    'gain': 0,
+                    'baseline': 0,
+                    'qualifies': True
+                })
         
         # Sort by total points and add rank numbers
         qualified.sort(key=lambda x: x.get('total_points', 0), reverse=True)
         for idx, user in enumerate(qualified, 1):
             user['rank'] = idx
         
-        # Calculate next reset time
-        now = datetime.now()
-        next_midnight = (now + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
-        next_reset_iso = next_midnight.isoformat()
+        # Calculate next reset time - midnight EST (00:05)
+        from datetime import timezone, timedelta
+        est = timezone(timedelta(hours=-5))
+        edt = timezone(timedelta(hours=-4))
+        now_utc = datetime.now(timezone.utc)
+        is_dst = now_utc.month >= 3 and now_utc.month < 11
+        est_offset = edt if is_dst else est
+        now_est = now_utc.astimezone(est_offset)
+        
+        # Calculate next midnight EST + 5 minutes
+        next_midnight_est = (now_est + timedelta(days=1)).replace(hour=0, minute=5, second=0, microsecond=0)
+        next_reset_iso = next_midnight_est.isoformat()
         
         # Get current daily winner
         current_winner = db.get_current_daily_winner()
@@ -463,68 +418,40 @@ def qualified_users():
         from daily_points_tracker import DailyPointsTracker
         from datetime import datetime, timedelta
         
-        tracker = DailyPointsTracker()
-        view = request.args.get('view', 'min1')  # 'min1' or 'gain24'
-        
-        # Compute dataset based on view
+        # Always use baseline qualification: All users with 1+ point qualify
         qualified = []
-        is_baseline = False
-        if view == 'min1':
-            # All users with >=1 point
-            qualified = points_integration.get_qualified_users(min_points=1, limit=None)
-        else:
-            # 24h gains view
-            today_str = datetime.now().strftime('%Y-%m-%d')
-            yesterday_str = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
-            
-            # Ensure we have today's snapshot
-            today_snapshot = tracker.load_snapshot(today_str)
-            if not today_snapshot:
-                current_users = points_scraper.get_leaderboard(limit=None)
-                tracker.save_snapshot(current_users)
-                today_snapshot = tracker.load_snapshot(today_str)
-            
-            gains_data = tracker.get_daily_gains(min_gain=1)
-            
-            # If no baseline yet, show all users with note
-            if gains_data.get('baseline_created'):
-                is_baseline = True
-                for username, user_data in today_snapshot.get('users', {}).items():
-                    total_pts = user_data.get('total_points', 0)
-                    # Only include users with >= 1 total points (exclude negative)
-                    if total_pts >= 1:
-                        qualified.append({
-                            'username': username,
-                            'total_points': total_pts,
-                            'rank': user_data.get('rank', 0),
-                            'gain': 0,
-                            'yesterday_points': 0,
-                            'today_points': total_pts
-                        })
-            elif gains_data.get('gains'):
-                # Show only users who gained points AND have >= 1 total points
-                for gain_info in gains_data['gains']:
-                    username = gain_info['username']
-                    user_data = today_snapshot.get('users', {}).get(username, {})
-                    total_pts = user_data.get('total_points', gain_info['today_points'])
-                    # Only include users with >= 1 total points (exclude negative)
-                    if total_pts >= 1:
-                        qualified.append({
-                            'username': username,
-                            'total_points': total_pts,
-                            'rank': user_data.get('rank', 0),
-                            'gain': gain_info['gain'],
-                            'yesterday_points': gain_info['yesterday_points'],
-                            'today_points': gain_info['today_points']
-                        })
+        is_baseline = True
+        
+        # Fetch current users and show all with 1+ point
+        current_users = points_scraper.get_leaderboard(limit=None)
+        for user in current_users:
+            current_points = user.get('total_points', 0)
+            if current_points >= 1:  # All users with at least 1 point qualify
+                qualified.append({
+                    'username': user['username'],
+                    'total_points': current_points,
+                    'rank': user.get('rank', 0),
+                    'gain': 0,
+                    'yesterday_points': 0,
+                    'today_points': current_points
+                })
         
         # Sort by points descending
         qualified.sort(key=lambda x: x['total_points'], reverse=True)
         
-        # Calculate next reset time (midnight)
-        now = datetime.now()
-        next_midnight = (now + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
-        time_until_reset = (next_midnight - now).total_seconds()
+        # Calculate next reset time - midnight EST (00:05)
+        from datetime import timezone, timedelta
+        est = timezone(timedelta(hours=-5))
+        edt = timezone(timedelta(hours=-4))
+        now_utc = datetime.now(timezone.utc)
+        is_dst = now_utc.month >= 3 and now_utc.month < 11
+        est_offset = edt if is_dst else est
+        now_est = now_utc.astimezone(est_offset)
+        
+        next_midnight_est = (now_est + timedelta(days=1)).replace(hour=0, minute=5, second=0, microsecond=0)
+        next_midnight = next_midnight_est.astimezone(timezone.utc)
+        now_utc_local = datetime.now(timezone.utc)
+        time_until_reset = (next_midnight - now_utc_local).total_seconds()
         
         # Get current winner
         current_winner = db.get_current_daily_winner()
@@ -535,7 +462,7 @@ def qualified_users():
                              total=len(qualified),
                              is_baseline=is_baseline,
                              view=view,
-                             next_reset_iso=next_midnight.isoformat(),
+                             next_reset_iso=next_midnight_est.isoformat(),
                              current_winner=current_winner)
     except Exception as e:
         return f"Error: {str(e)}", 500
@@ -555,72 +482,19 @@ def api_qualified():
         # Fetch FRESH live data
         current_users = points_scraper.get_leaderboard(limit=None)
         
-        # Get last winner's snapshot for round-based qualification
-        last_snapshot_date = db.get_last_winner_snapshot_date()
+        # Always use baseline qualification: All users with 1+ point qualify
         qualified = []
         
-        if last_snapshot_date:
-            # Round-based: show ALL users, mark only those who gained +1 as qualified
-            tracker = DailyPointsTracker()
-            previous_snapshot = tracker.load_snapshot(last_snapshot_date)
-            
-            if previous_snapshot:
-                current_dict = {u['username']: u for u in current_users}
-                previous_users = previous_snapshot.get('users', {})
-                
-                # Check if snapshot has actual user data
-                if previous_users and len(previous_users) > 0:
-                    # We have a valid snapshot with user data
-                    for username in current_dict:
-                        current_user = current_dict[username]
-                        current_points = current_user.get('total_points', 0)
-                        qualifies = False
-                        gain = 0
-                        baseline = 0
-                        
-                        if username in previous_users:
-                            previous_points = previous_users[username].get('total_points', 0)
-                            gain = current_points - previous_points
-                            baseline = previous_points
-                            if gain >= 1 and current_points >= 1:
-                                qualifies = True
-                        else:
-                            # New user
-                            if current_points >= 1:
-                                gain = current_points
-                                qualifies = True
-                        
-                        qualified.append({
-                            'username': username,
-                            'total_points': current_points,
-                            'gain': gain,
-                            'baseline': baseline,
-                            'qualifies': qualifies
-                        })
-                else:
-                    # Snapshot exists but is empty - treat as baseline
-                    for user in current_users:
-                        current_points = user.get('total_points', 0)
-                        if current_points >= 1:
-                            qualified.append({
-                                'username': user['username'],
-                                'total_points': current_points,
-                                'gain': 0,
-                                'baseline': 0,
-                                'qualifies': True
-                            })
-        else:
-            # No previous snapshot - show all users with all marked as qualified for initial display
-            for user in current_users:
-                current_points = user.get('total_points', 0)
-                if current_points >= 1:  # Only show users with at least 1 point
-                    qualified.append({
-                        'username': user['username'],
-                        'total_points': current_points,
-                        'gain': 0,
-                        'baseline': 0,
-                        'qualifies': True
-                    })
+        for user in current_users:
+            current_points = user.get('total_points', 0)
+            if current_points >= 1:  # All users with at least 1 point qualify
+                qualified.append({
+                    'username': user['username'],
+                    'total_points': current_points,
+                    'gain': 0,
+                    'baseline': 0,
+                    'qualifies': True
+                })
 
         # Sort by total points
         qualified.sort(key=lambda x: x.get('total_points', 0), reverse=True)
@@ -632,15 +506,15 @@ def api_qualified():
         if limit is not None and limit > 0:
             qualified = qualified[:limit]
 
-        # Count how many actually qualify
-        actually_qualified = sum(1 for u in qualified if u.get('qualifies', False))
+        # All users qualify (baseline mode)
+        actually_qualified = len(qualified)
         
         return jsonify({
             'success': True,
             'qualified_users': qualified,
             'total': len(qualified),
             'qualified_count': actually_qualified,
-            'baseline_date': last_snapshot_date
+            'baseline_mode': True
         })
     except Exception as e:
         return jsonify({
@@ -737,81 +611,20 @@ def select_daily_winner_with_fresh_data():
         tracker.save_snapshot(current_users)
         today_snapshot = tracker.load_snapshot(today_str)
         
-        # STEP 3: Get last winner's snapshot date (round-based qualification)
-        last_snapshot_date = db.get_last_winner_snapshot_date()
-        print(f"📅 Last winner's snapshot: {last_snapshot_date or 'First round'}")
-
-        # STEP 4: Compare to last winner's snapshot to find gains since last round
-        if last_snapshot_date and last_snapshot_date != today_str:
-            print(f"📈 Comparing current data ({today_str}) to last round ({last_snapshot_date})...")
-            previous_snapshot = tracker.load_snapshot(last_snapshot_date)
-            
-            if previous_snapshot:
-                gains_data = {
-                    'round_based': True,
-                    'gains': []
-                }
-                
-                # Compare current vs previous snapshot
-                today_users = today_snapshot.get('users', {})
-                previous_users = previous_snapshot.get('users', {})
-                
-                for username in today_users:
-                    today_user = today_users[username]
-                    today_points = today_user.get('total_points', 0)
-                    
-                    if username in previous_users:
-                        previous_points = previous_users[username].get('total_points', 0)
-                        gain = today_points - previous_points
-                        
-                        if gain >= 1:  # Must gain at least 1 point since last round
-                            gains_data['gains'].append({
-                                'username': username,
-                                'previous_points': previous_points,
-                                'today_points': today_points,
-                                'gain': gain
-                            })
-                    else:
-                        # New user since last round
-                        if today_points >= 1:
-                            gains_data['gains'].append({
-                                'username': username,
-                                'previous_points': 0,
-                                'today_points': today_points,
-                                'gain': today_points
-                            })
-            else:
-                print(f"⚠️ Previous snapshot {last_snapshot_date} not found, using baseline")
-                gains_data = {'baseline_created': True, 'gains': []}
-        else:
-            # First round or no previous snapshot
-            print("📈 First round - using baseline comparison...")
-            gains_data = tracker.get_daily_gains(min_gain=1)
+        # STEP 3: Always use baseline qualification (all users with 1+ point qualify)
+        print("📅 Using baseline qualification: All users with ≥1 point qualify")
         
-        # STEP 5: Build qualified users list
+        # STEP 4: Build qualified users list (baseline mode - all users with 1+ point)
         qualified = []
         
-        if gains_data.get('baseline_created'):
-            # First day - all users with ≥1 point
-            print("📅 First round - using all users with ≥1 point")
-            for username, user_data in today_snapshot.get('users', {}).items():
-                total_pts = user_data.get('total_points', 0)
-                if total_pts >= 1:
-                    qualified.append({
-                        'username': username,
-                        'total_points': total_pts
-                    })
-        elif gains_data.get('gains'):
-            # Round-based - only users who gained +1 since last winner
-            print(f"📊 Found {len(gains_data['gains'])} users who gained 1+ points since last round")
-            for gain_info in gains_data['gains']:
-                username = gain_info['username']
-                total_pts = gain_info['today_points']
-                if total_pts >= 1:
-                    qualified.append({
-                        'username': username,
-                        'total_points': total_pts
-                    })
+        # Always use baseline: all users with ≥1 point qualify
+        for username, user_data in today_snapshot.get('users', {}).items():
+            total_pts = user_data.get('total_points', 0)
+            if total_pts >= 1:
+                qualified.append({
+                    'username': username,
+                    'total_points': total_pts
+                })
         
         if not qualified:
             print("❌ No eligible users found")
@@ -819,14 +632,15 @@ def select_daily_winner_with_fresh_data():
         
         print(f"✅ {len(qualified)} qualified users")
         
-        # STEP 6: Check if winner already exists for today - using EST date
+        # STEP 5: Check if winner already exists for today - using EST date
         drawing_date = now_est.date().isoformat()
         existing = db.get_winner_for_date(drawing_date)
         if existing:
             print(f"✅ Winner already selected for {drawing_date}: @{existing['username']}")
+            print(f"   Will not select another winner until 00:05 EST tomorrow")
             return existing
         
-        # STEP 7: Select winner randomly
+        # STEP 6: Select winner randomly
         print("🎲 Selecting random winner...")
         seed_string = f"{drawing_date}{datetime.now().isoformat()}{len(qualified)}"
         random_seed = int(hashlib.sha256(seed_string.encode()).hexdigest()[:8], 16) % 1000000
@@ -844,13 +658,13 @@ def select_daily_winner_with_fresh_data():
             f"{drawing_date}{winner_username}{winner_points}{random_seed}{len(qualified)}".encode()
         ).hexdigest()[:16]
         
-        # STEP 8: Save winner with snapshot date for next round
+        # STEP 7: Save winner with snapshot date
         success = db.record_daily_winner(
             winner_username, winner_points, drawing_date, 
             total_eligible=len(qualified),
             random_seed=random_seed,
             selection_hash=selection_hash,
-            snapshot_date=today_str  # Store snapshot date for next round's comparison
+            snapshot_date=today_str
         )
         
         if success:
@@ -978,9 +792,16 @@ def api_select_winner():
     if not POINTSMARKET_ENABLED:
         return jsonify({'error': 'PointsMarket integration not available'}), 404
     
-    # FIRST: Check if winner already exists for today - prevent duplicate selections
-    from datetime import date
-    drawing_date = date.today().isoformat()
+    # FIRST: Check if winner already exists for today (using EST date) - prevent duplicate selections
+    from datetime import timezone, timedelta
+    est = timezone(timedelta(hours=-5))
+    edt = timezone(timedelta(hours=-4))
+    now_utc = datetime.now(timezone.utc)
+    is_dst = now_utc.month >= 3 and now_utc.month < 11
+    est_offset = edt if is_dst else est
+    now_est = now_utc.astimezone(est_offset)
+    drawing_date = now_est.date().isoformat()
+    
     existing = db.get_winner_for_date(drawing_date)
     
     if existing:
@@ -1027,7 +848,7 @@ def api_select_winner():
             'selection_hash': result.get('selection_hash'),
             'seed_string': result.get('seed_string'),
             'winner_index': result.get('winner_index'),
-            'selection_criteria': 'Users with ≥1 total points who gained +1 point in last 24 hours'
+            'selection_criteria': 'All users with ≥1 total point qualify (baseline mode)'
         })
     else:
         return jsonify({
@@ -1107,37 +928,9 @@ def api_check_qualification(username):
         
         total_points = user_data.get('total_points', 0)
         
-        # Check 24h gains
-        gains_data = tracker.get_daily_gains(min_gain=1)
-        gained_in_24h = 0
-        qualifies = False
-        reason = ""
-        
-        if gains_data.get('baseline_created'):
-            # First day - only need ≥1 total point
-            qualifies = total_points >= 1
-            reason = "✅ QUALIFIED! Baseline day - you have 1+ points" if qualifies else f"❌ Need at least 1 point (you have {total_points})"
-        elif gains_data.get('gains'):
-            # Normal day - need ≥1 total AND +1 gain in last 24h
-            user_gain_info = None
-            for gain in gains_data['gains']:
-                if gain['username'].lower() == username:
-                    user_gain_info = gain
-                    break
-            
-            if user_gain_info:
-                gained_in_24h = user_gain_info['gain']
-                qualifies = total_points >= 1 and gained_in_24h >= 1
-                if qualifies:
-                    reason = f"✅ QUALIFIED! You have {total_points} total points and gained {gained_in_24h} point(s) in the last 24 hours"
-                else:
-                    if total_points < 1:
-                        reason = f"❌ Need at least 1 total point (you have {total_points})"
-                    else:
-                        reason = f"⚠️ You have {total_points} points but need to gain +1 point in the last 24h (you gained {gained_in_24h})"
-            else:
-                qualifies = False
-                reason = f"❌ You have {total_points} total points but didn't gain any points in the last 24 hours"
+        # Always use baseline qualification: only need ≥1 total point
+        qualifies = total_points >= 1
+        reason = "✅ QUALIFIED! You have 1+ points (baseline mode)" if qualifies else f"❌ Need at least 1 point (you have {total_points})"
         
         return jsonify({
             'username': username,
@@ -1145,7 +938,7 @@ def api_check_qualification(username):
             'qualifies': qualifies,
             'reason': reason,
             'total_points': total_points,
-            'gained_in_24h': gained_in_24h,
+            'gained_in_24h': 0,  # Baseline mode - no gain requirement
             'rank': user_data.get('rank', 0)
         })
         

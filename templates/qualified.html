@@ -1074,21 +1074,46 @@
         function calculateNextMidnightEST() {
             const now = new Date();
             
-            // Get current time in EST (considering DST)
+            // Get current UTC time components
+            const nowUTC = {
+                year: now.getUTCFullYear(),
+                month: now.getUTCMonth(),
+                date: now.getUTCDate(),
+                hour: now.getUTCHours(),
+                minute: now.getUTCMinutes()
+            };
+            
             // Check if we're in DST (roughly March-November)
-            const month = now.getUTCMonth();
-            const isDST = month >= 2 && month < 10; // March (2) through October (9)
-            const estOffset = isDST ? -4 : -5; // EDT is UTC-4, EST is UTC-5
+            const isDST = nowUTC.month >= 2 && nowUTC.month < 10; // March (2) through October (9)
+            const estOffsetHours = isDST ? 4 : 5; // Hours to subtract from UTC to get EST (EDT: UTC-4, EST: UTC-5)
             
-            const nowEST = new Date(now.getTime() + (now.getTimezoneOffset() + estOffset * 60) * 60 * 1000);
+            // Calculate current EST time
+            let estHour = nowUTC.hour - estOffsetHours;
+            let estDate = nowUTC.date;
+            let estMonth = nowUTC.month;
+            let estYear = nowUTC.year;
             
-            // Calculate next midnight EST + 5 minutes (for PointsMarket update fairness)
-            const nextMidnight = new Date(nowEST);
-            nextMidnight.setDate(nextMidnight.getDate() + 1);
-            nextMidnight.setHours(0, 5, 0, 0);  // 00:05 EST
+            // Handle day/month/year rollover
+            if (estHour < 0) {
+                estHour += 24;
+                estDate--;
+                if (estDate < 1) {
+                    estMonth--;
+                    if (estMonth < 0) {
+                        estMonth = 11;
+                        estYear--;
+                    }
+                    estDate = new Date(estYear, estMonth + 1, 0).getDate(); // Days in previous month
+                }
+            }
             
-            // Convert back to UTC for countdown
-            return new Date(nextMidnight.getTime() - (estOffset * 60) * 60 * 1000);
+            // Calculate next midnight EST (00:05)
+            const nextMidnightEST = new Date(Date.UTC(estYear, estMonth, estDate + 1, 0, 5, 0, 0));
+            
+            // Convert EST midnight to UTC (add the offset back)
+            const nextMidnightUTC = new Date(nextMidnightEST.getTime() + (estOffsetHours * 60 * 60 * 1000));
+            
+            return nextMidnightUTC;
         }
         
         try {
