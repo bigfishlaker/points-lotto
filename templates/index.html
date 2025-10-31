@@ -777,7 +777,7 @@
             </div>
             <div class="rng-terminal-body">
                 <div id="rngTerminalOutput" class="rng-terminal-output">
-                    <div class="rng-terminal-line info">$ Initializing random number generator...</div>
+                    <!-- Content will be loaded dynamically -->
                 </div>
                 <div class="rng-terminal-prompt">
                     <span class="rng-prompt">points-lotto@selection:</span>
@@ -837,6 +837,8 @@
             const modal = document.getElementById('rngTerminalModal');
             if (modal) {
                 modal.classList.add('active');
+                // Load current winner display when opening
+                loadCurrentWinnerDisplay();
             }
         }
         
@@ -847,15 +849,72 @@
             }
         }
         
-        function addTerminalLine(text, className = 'info') {
+        function addTerminalLine(text, className = 'info', typingSpeed = 0) {
             const output = document.getElementById('rngTerminalOutput');
             if (output) {
                 const line = document.createElement('div');
                 line.className = 'rng-terminal-line ' + className;
-                line.textContent = text;
-                output.appendChild(line);
+                
+                if (typingSpeed > 0) {
+                    line.textContent = '';
+                    output.appendChild(line);
+                    typeText(line, text, typingSpeed);
+                } else {
+                    line.textContent = text;
+                    output.appendChild(line);
+                }
+                
                 output.scrollTop = output.scrollHeight;
             }
+        }
+        
+        function typeText(element, text, speed = 30) {
+            let i = 0;
+            const interval = setInterval(() => {
+                if (i < text.length) {
+                    element.textContent += text.charAt(i);
+                    element.parentElement.scrollTop = element.parentElement.scrollHeight;
+                    i++;
+                } else {
+                    clearInterval(interval);
+                }
+            }, speed);
+        }
+        
+        function loadCurrentWinnerDisplay() {
+            const output = document.getElementById('rngTerminalOutput');
+            if (!output) return;
+            
+            fetch('/api/current_winner')
+                .then(r => r.json())
+                .then(data => {
+                    output.innerHTML = '';
+                    if (data.success && data.winner) {
+                        addTerminalLine('$ Today\'s Winner', 'success', 30);
+                        addTerminalLine('', 'info', 0);
+                        addTerminalLine('🏆 WINNER:', 'result', 40);
+                        addTerminalLine(`   Username: @${data.winner.username}`, 'result', 30);
+                        addTerminalLine(`   Points: ${data.winner.points}`, 'result', 30);
+                        addTerminalLine(`   Date: ${data.winner.drawing_date || 'N/A'}`, 'result', 30);
+                        if (data.total_eligible) {
+                            addTerminalLine(`   Selected from: ${data.total_eligible} eligible users`, 'data', 25);
+                        }
+                        if (data.random_seed) {
+                            addTerminalLine(`   Random Seed: ${data.random_seed}`, 'data', 25);
+                        }
+                        if (data.selection_hash) {
+                            addTerminalLine(`   Selection Hash: ${data.selection_hash}`, 'data', 25);
+                        }
+                        addTerminalLine('', 'info', 0);
+                        addTerminalLine('$ Waiting for next drawing at 00:05 EST...', 'info', 30);
+                    } else {
+                        addTerminalLine('$ No winner selected yet', 'info', 30);
+                        addTerminalLine('$ Next drawing: 00:05 EST', 'info', 30);
+                    }
+                })
+                .catch(err => {
+                    output.innerHTML = '<div class="rng-terminal-line error">$ Error loading winner data</div>';
+                });
         }
         
         function showWinnerProcess() {
