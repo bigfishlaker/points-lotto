@@ -842,7 +842,10 @@
                                     </a>
                                     <div style="font-size: 11px; color: #888; margin-top: 3px;">{{ w.drawing_date if w.drawing_date else 'N/A' }}</div>
                                 </div>
-                                <div style="font-size: 14px; color: #4CAF50; font-weight: 700;">WIN</div>
+                                <div style="display: flex; flex-direction: column; align-items: flex-end;">
+                                    <div style="font-size: 14px; color: #4CAF50; font-weight: 700;">WIN</div>
+                                    <div style="font-size: 11px; color: #666; margin-top: 2px;">{{ w.points }} pts</div>
+                                </div>
                             </div>
                             {% endfor %}
                         {% else %}
@@ -944,7 +947,10 @@
                                         </a>
                                         <div style="font-size: 11px; color: #888; margin-top: 3px;">${date}</div>
                                     </div>
-                                    <div style="font-size: 14px; color: #4CAF50; font-weight: 700;">WIN</div>
+                                    <div style="display: flex; flex-direction: column; align-items: flex-end;">
+                                        <div style="font-size: 14px; color: #4CAF50; font-weight: 700;">WIN</div>
+                                        <div style="font-size: 11px; color: #666; margin-top: 2px;">${w.points || 0} pts</div>
+                                    </div>
                                 </div>
                             `;
                         }).join('');

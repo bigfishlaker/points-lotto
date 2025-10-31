@@ -127,9 +127,11 @@ def select_winner():
         winner = random.choice(qualified)
         random.seed()
         
-        # Calculate lottery points: sequential based on winner count (1, 2, 3, 4, ...)
+        # Calculate lottery points: sequential based on TOTAL winner entries count (1, 2, 3, 4, ...)
+        # Each win gets its own unique sequential number, even if same user wins multiple times
+        # Example: User A wins 1st time = 1 point, User B wins = 2 points, User A wins 2nd time = 3 points
         all_winners = db.get_all_winners()
-        lottery_points = len(all_winners) + 1
+        lottery_points = len(all_winners) + 1  # Next sequential number
         
         selection_hash = hashlib.sha256(
             f"{today_str}{winner['username']}{lottery_points}{random_seed}".encode()
