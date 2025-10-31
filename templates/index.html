@@ -828,7 +828,24 @@
                     <div style="font-size: 14px; font-weight: 600; color: #fff; margin-bottom: 12px;">Winners</div>
                     <div style="font-size: 11px; color: #888; margin-bottom: 12px;">Automatic Daily • Next: 00:05 EST</div>
                     <div id="winnersLeaderboard" style="max-height: 300px; overflow-y: auto;">
-                        <div style="text-align: center; color: #666; padding: 20px; font-size: 12px;">Loading winners...</div>
+                        {% if all_winners and all_winners|length > 0 %}
+                            {% for w in all_winners|sort(attribute='selected_at') %}
+                            <div style="display: flex; align-items: center; padding: 8px 0; border-bottom: 1px solid #222;">
+                                <div style="width: 24px; font-size: 11px; color: #666; margin-right: 8px;">{{ loop.index }}</div>
+                                <img src="https://unavatar.io/twitter/{{ w.username }}" 
+                                     alt="{{ w.username }}" 
+                                     style="width: 24px; height: 24px; border-radius: 50%; margin-right: 8px; border: 1px solid #333;"
+                                     onerror="this.src='https://abs.twimg.com/sticky/default_profile_images/default_profile_normal.png';">
+                                <div style="flex: 1;">
+                                    <div style="font-size: 12px; color: #fff; font-weight: 500;">@{{ w.username }}</div>
+                                    <div style="font-size: 10px; color: #666;">{{ w.drawing_date or 'N/A' }}</div>
+                                </div>
+                                <div style="font-size: 12px; color: #4CAF50; font-weight: 600;">{{ w.points or 0 }} pts</div>
+                            </div>
+                            {% endfor %}
+                        {% else %}
+                            <div style="text-align: center; color: #666; padding: 20px; font-size: 12px;">No winners yet</div>
+                        {% endif %}
                     </div>
                 </div>
             </div>
@@ -893,24 +910,15 @@
                 .catch(err => console.error('Error loading ticker:', err));
         }
         
-        // Load winners leaderboard in the card
+        // Load winners leaderboard in the card (refresh only - initial render is server-side)
         function loadWinnersLeaderboard() {
-            console.log('Loading winners leaderboard...');
             fetch('/api/all_winners')
-                .then(r => {
-                    console.log('API response status:', r.status);
-                    return r.json();
-                })
+                .then(r => r.json())
                 .then(data => {
-                    console.log('API response data:', data);
                     const container = document.getElementById('winnersLeaderboard');
-                    if (!container) {
-                        console.error('Winners leaderboard container not found');
-                        return;
-                    }
+                    if (!container) return;
                     
                     if (data.success && data.winners && data.winners.length > 0) {
-                        console.log('Found winners:', data.winners.length);
                         // Sort chronologically by selected_at or drawing_date
                         const sorted = [...data.winners].sort((a, b) => {
                             const dateA = a.selected_at ? new Date(a.selected_at) : (a.drawing_date ? new Date(a.drawing_date) : new Date(0));
@@ -935,18 +943,12 @@
                                 </div>
                             `;
                         }).join('');
-                        console.log('Winners leaderboard updated');
                     } else {
-                        console.log('No winners in response:', data);
                         container.innerHTML = '<div style="text-align: center; color: #666; padding: 20px; font-size: 12px;">No winners yet</div>';
                     }
                 })
                 .catch(err => {
                     console.error('Error loading winners leaderboard:', err);
-                    const container = document.getElementById('winnersLeaderboard');
-                    if (container) {
-                        container.innerHTML = '<div style="text-align: center; color: #666; padding: 20px; font-size: 12px;">Error loading winners</div>';
-                    }
                 });
         }
         
@@ -1360,14 +1362,9 @@
         });
         
         // Initialize on page load
-        console.log('Initializing page...');
         loadTicker();
-        
-        // Load winners leaderboard immediately
-        setTimeout(() => {
-            console.log('Calling loadWinnersLeaderboard...');
-            loadWinnersLeaderboard();
-        }, 100);
+        // Winners are rendered server-side, but refresh periodically to catch new winners
+        // Don't call immediately since we have server-side render
         
         updateCountdown();
         setInterval(updateCountdown, 1000);
