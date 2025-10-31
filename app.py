@@ -70,7 +70,7 @@ def init_database_with_winners():
                 )
                 if success:
                     print(f"  Added initial winner: @{winner['username']}")
-    else:
+                else:
                     print(f"  Failed to add: @{winner['username']} (may already exist)")
             
             # Verify
