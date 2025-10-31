@@ -487,4 +487,25 @@ class DatabaseManager:
         if result:
             return result[0]
         return None
+    
+    def get_all_winners(self) -> List[Dict]:
+        """Get all winners ordered chronologically by selected_at"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT winner_username, winner_points, drawing_date, selected_at, total_eligible, random_seed, selection_hash
+            FROM daily_winners
+            ORDER BY selected_at ASC
+        ''')
+        results = cursor.fetchall()
+        conn.close()
+        return [{
+            'username': result[0],
+            'points': result[1],
+            'drawing_date': result[2],
+            'selected_at': result[3],
+            'total_eligible': result[4],
+            'random_seed': result[5],
+            'selection_hash': result[6]
+        } for result in results]
 

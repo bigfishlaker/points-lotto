@@ -156,11 +156,15 @@ def index():
         # Get current winner
         current_winner = db.get_current_winner()
         
+        # Get all winners for the leaderboard
+        all_winners = db.get_all_winners()
+        
         return render_template('index.html',
                              qualified_users=qualified,
                              total_qualified=len(qualified),
                              next_reset=next_midnight.isoformat(),
-                             current_winner=current_winner)
+                             current_winner=current_winner,
+                             all_winners=all_winners)
     except Exception as e:
         return f"Error: {str(e)}", 500
 
