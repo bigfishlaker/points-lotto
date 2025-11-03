@@ -36,10 +36,29 @@ def init_database_with_winners():
         print(f"Database has {len(winners)} existing winners")
         
         if len(winners) == 0:
-            print("Initializing database with initial winners...")
-            from datetime import datetime
+            print("Database empty - loading winners from backup file...")
+            import json
+            import os
             
-            initial_winners = [
+            # Try to load from winners_backup.json first
+            backup_file = 'winners_backup.json'
+            initial_winners = []
+            
+            if os.path.exists(backup_file):
+                try:
+                    with open(backup_file, 'r') as f:
+                        initial_winners = json.load(f)
+                    print(f"✅ Loaded {len(initial_winners)} winners from {backup_file}")
+                except Exception as e:
+                    print(f"⚠️  Failed to load {backup_file}: {e}")
+                    initial_winners = []
+            
+            # Fallback to hardcoded winners if backup doesn't exist or is empty
+            if not initial_winners:
+                print("Using hardcoded initial winners as fallback...")
+                from datetime import datetime
+                
+                initial_winners = [
                 {
                     'username': 'noobysol',
                     'points': 1,  # First winner gets 1 point
@@ -108,9 +127,28 @@ def init_database_with_winners():
                     import traceback
                     traceback.print_exc()
             
-            # Verify
+            # Verify and update backup file
             winners = db.get_all_winners()
             print(f"Database now has {len(winners)} winners")
+            
+            # Auto-update backup file after loading winners
+            try:
+                import json
+                backup_data = []
+                for w in winners:
+                    backup_data.append({
+                        'username': w.get('username'),
+                        'points': w.get('points'),
+                        'drawing_date': w.get('drawing_date'),
+                        'total_eligible': w.get('total_eligible'),
+                        'random_seed': w.get('random_seed'),
+                        'selection_hash': w.get('selection_hash')
+                    })
+                with open('winners_backup.json', 'w') as f:
+                    json.dump(backup_data, f, indent=2, ensure_ascii=False)
+                print(f"✅ Updated winners_backup.json with {len(backup_data)} winners")
+            except Exception as e:
+                print(f"⚠️  Failed to update backup file: {e}")
         else:
             print(f"Database already initialized with {len(winners)} winners")
         
@@ -242,6 +280,27 @@ def select_winner_for_date(drawing_date: str, exclude_usernames: list = None):
         
         if success:
             print(f"Winner for {drawing_date}: @{winner['username']} (lottery points: {lottery_points})")
+            
+            # Auto-update backup file when new winner is saved
+            try:
+                import json
+                all_winners_updated = db.get_all_winners()
+                backup_data = []
+                for w in all_winners_updated:
+                    backup_data.append({
+                        'username': w.get('username'),
+                        'points': w.get('points'),
+                        'drawing_date': w.get('drawing_date'),
+                        'total_eligible': w.get('total_eligible'),
+                        'random_seed': w.get('random_seed'),
+                        'selection_hash': w.get('selection_hash')
+                    })
+                with open('winners_backup.json', 'w') as f:
+                    json.dump(backup_data, f, indent=2, ensure_ascii=False)
+                print(f"✅ Auto-updated winners_backup.json ({len(backup_data)} winners)")
+            except Exception as e:
+                print(f"⚠️  Failed to update backup file: {e}")
+            
             return {
                 'username': winner['username'],
                 'points': lottery_points,
