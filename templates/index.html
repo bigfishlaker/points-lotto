@@ -983,13 +983,19 @@
             position: absolute;
             width: 50px;
             height: 50px;
-            background-image: url('/static/img/miladet.jpg');
-            background-size: cover;
-            background-position: center;
             border-radius: 50%;
             opacity: 0;
             animation: confettiFall linear forwards;
             box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+            object-fit: cover;
+        }
+        
+        .confetti-piece img {
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            object-fit: cover;
+            display: block;
         }
         
         @keyframes confettiFall {
@@ -1402,6 +1408,16 @@
             for (let i = 0; i < count; i++) {
                 const confetti = document.createElement('div');
                 confetti.className = 'confetti-piece';
+                
+                // Create img element inside
+                const img = document.createElement('img');
+                img.src = '/static/img/miladet.jpg';
+                img.alt = 'Confetti';
+                img.style.width = '100%';
+                img.style.height = '100%';
+                img.style.objectFit = 'cover';
+                img.style.borderRadius = '50%';
+                confetti.appendChild(img);
                 
                 // Random starting position at top
                 const startX = Math.random() * 100; // 0-100% across screen
