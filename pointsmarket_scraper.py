@@ -137,13 +137,15 @@ class PointsMarketScraper:
         retry_delay = 2
         
         for attempt in range(max_retries):
-            try:
-                # Access the leaderboard API
-                url = f"{self.base_url}/api/leaderboard"
-                print(f"  📡 Calling PointsMarket API: {url} (attempt {attempt + 1}/{max_retries})")
-                
-                # Don't limit API call - fetch all available users
-                response = self.session.get(url, timeout=15)
+        try:
+            # Access the leaderboard API - try with pagination parameters
+            url = f"{self.base_url}/api/leaderboard"
+            # Try with limit parameter to get all users
+            params = {'limit': 1000, 'offset': 0}  # Request large limit
+            print(f"  📡 Calling PointsMarket API: {url} (attempt {attempt + 1}/{max_retries})")
+            
+            # Don't limit API call - fetch all available users
+            response = self.session.get(url, params=params, timeout=15)
                 
                 print(f"  📊 API Response Status: {response.status_code}")
                 
@@ -165,71 +167,72 @@ class PointsMarketScraper:
                         time.sleep(retry_delay)
                         continue
                     return self._fallback_scrape_leaderboard()
-            
-            if response.status_code == 200:
-                try:
-                    data = response.json()
-                    print(f"  📦 Response data keys: {list(data.keys()) if isinstance(data, dict) else 'Not a dict'}")
-                    
-                    # Extract leaderboard data from the API response
-                    # Try multiple possible keys
-                    leaderboard_data = None
-                    if isinstance(data, list):
-                        leaderboard_data = data
-                        print(f"  ✅ Response is a list with {len(leaderboard_data)} items")
-                    elif isinstance(data, dict):
-                        leaderboard_data = data.get('leaderboard') or data.get('users') or data.get('data')
-                        print(f"  ✅ Found leaderboard_data: {type(leaderboard_data)}, length: {len(leaderboard_data) if leaderboard_data else 0}")
-                    else:
-                        print(f"  ⚠️  Unexpected response type: {type(data)}")
-                    
-                    if not leaderboard_data:
-                        print(f"  ⚠️  No leaderboard data found in response. Full response: {str(data)[:500]}")
-                        # Try fallback scraping
+                
+                # Process successful response
+                if response.status_code == 200:
+                    try:
+                        data = response.json()
+                        print(f"  📦 Response data keys: {list(data.keys()) if isinstance(data, dict) else 'Not a dict'}")
+                        
+                        # Extract leaderboard data from the API response
+                        # Try multiple possible keys
+                        leaderboard_data = None
+                        if isinstance(data, list):
+                            leaderboard_data = data
+                            print(f"  ✅ Response is a list with {len(leaderboard_data)} items")
+                        elif isinstance(data, dict):
+                            leaderboard_data = data.get('leaderboard') or data.get('users') or data.get('data')
+                            print(f"  ✅ Found leaderboard_data: {type(leaderboard_data)}, length: {len(leaderboard_data) if leaderboard_data else 0}")
+                        else:
+                            print(f"  ⚠️  Unexpected response type: {type(data)}")
+                        
+                        if not leaderboard_data:
+                            print(f"  ⚠️  No leaderboard data found in response. Full response: {str(data)[:500]}")
+                            # Try fallback scraping
+                            return self._fallback_scrape_leaderboard()
+                        
+                        users = []
+                        # Limit slicing only if limit is specified
+                        data_to_process = leaderboard_data if limit is None else leaderboard_data[:limit]
+                        
+                        print(f"  🔄 Processing {len(data_to_process)} users...")
+                        
+                        for i, user in enumerate(data_to_process):
+                            # Extract relevant user data
+                            if not isinstance(user, dict):
+                                print(f"  ⚠️  User {i} is not a dict: {type(user)}")
+                                continue
+                            
+                            community_score = user.get('community_score', {})
+                            # Try multiple field names for points
+                            total_points = user.get('points') or user.get('total_points') or user.get('score', 0)
+                            
+                            username = user.get('username') or user.get('handle') or user.get('name', '')
+                            if not username:
+                                print(f"  ⚠️  User {i} has no username: {user}")
+                                continue
+                            
+                            user_info = {
+                                'username': username,
+                                'total_points': int(total_points) if total_points else 0,
+                                'upvotes': community_score.get('upvotes', 0) if isinstance(community_score, dict) else 0,
+                                'downvotes': community_score.get('downvotes', 0) if isinstance(community_score, dict) else 0,
+                                'rank': user.get('rank', i + 1),
+                                'transactions': user.get('transactions', 0),
+                                'badges': [b.get('badge_name', '') if isinstance(b, dict) else str(b) for b in user.get('badges', [])]
+                            }
+                            users.append(user_info)
+                        
+                        print(f"  ✅ Processed {len(users)} users successfully")
+                        if users:
+                            print(f"  📋 Sample user: {users[0]}")
+                        
+                        return users
+                    except json.JSONDecodeError as e:
+                        print(f"  ❌ JSON decode error: {e}")
+                        print(f"  📄 Response text (first 500 chars): {response.text[:500]}")
                         return self._fallback_scrape_leaderboard()
-                    
-                    users = []
-                    # Limit slicing only if limit is specified
-                    data_to_process = leaderboard_data if limit is None else leaderboard_data[:limit]
-                    
-                    print(f"  🔄 Processing {len(data_to_process)} users...")
-                    
-                    for i, user in enumerate(data_to_process):
-                        # Extract relevant user data
-                        if not isinstance(user, dict):
-                            print(f"  ⚠️  User {i} is not a dict: {type(user)}")
-                            continue
-                        
-                        community_score = user.get('community_score', {})
-                        # Try multiple field names for points
-                        total_points = user.get('points') or user.get('total_points') or user.get('score', 0)
-                        
-                        username = user.get('username') or user.get('handle') or user.get('name', '')
-                        if not username:
-                            print(f"  ⚠️  User {i} has no username: {user}")
-                            continue
-                        
-                        user_info = {
-                            'username': username,
-                            'total_points': int(total_points) if total_points else 0,
-                            'upvotes': community_score.get('upvotes', 0) if isinstance(community_score, dict) else 0,
-                            'downvotes': community_score.get('downvotes', 0) if isinstance(community_score, dict) else 0,
-                            'rank': user.get('rank', i + 1),
-                            'transactions': user.get('transactions', 0),
-                            'badges': [b.get('badge_name', '') if isinstance(b, dict) else str(b) for b in user.get('badges', [])]
-                        }
-                        users.append(user_info)
-                    
-                    print(f"  ✅ Processed {len(users)} users successfully")
-                    if users:
-                        print(f"  📋 Sample user: {users[0]}")
-                    
-                    return users
-                except json.JSONDecodeError as e:
-                    print(f"  ❌ JSON decode error: {e}")
-                    print(f"  📄 Response text (first 500 chars): {response.text[:500]}")
-                    return self._fallback_scrape_leaderboard()
-            
+                
                 # If we get here, we didn't handle the status code above, break out of retry loop
                 break
                 
@@ -294,7 +297,7 @@ class PointsMarketScraper:
             # Look for table rows or list items with user data
             rows = soup.find_all('tr') or soup.find_all('div', class_='user-item')
             
-            for row in rows[:100]:  # Limit to 100 users
+            for row in rows:  # Process all users (no limit)
                 user_data = {}
                 
                 # Extract username

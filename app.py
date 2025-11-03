@@ -380,8 +380,9 @@ def index():
             traceback.print_exc()
             users = []
         
+        # Filter for users with 1+ points (qualification requirement)
         qualified = [u for u in users if u.get('total_points', 0) >= 1]
-        print(f"Found {len(qualified)} qualified users (1+ points)")
+        print(f"Found {len(qualified)} qualified users (1+ points) out of {len(users)} total users")
         
         if len(qualified) == 0 and len(users) > 0:
             print(f"⚠️  No qualified users found, but {len(users)} total users fetched")
