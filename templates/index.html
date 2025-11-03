@@ -1180,7 +1180,13 @@
                             {% else %}
                             <tr>
                                 <td colspan="4" style="text-align: center; padding: 40px; color: #666;">
+                                    {% if api_error %}
+                                    <div style="color: #ff6b6b; margin-bottom: 10px;">⚠️ {{ api_error }}</div>
+                                    {% endif %}
                                     No qualified users found. Please check back later.
+                                    <div style="margin-top: 10px; font-size: 12px; color: #888;">
+                                        If this persists, the PointsMarket API may be temporarily unavailable.
+                                    </div>
                                 </td>
                             </tr>
                             {% endif %}

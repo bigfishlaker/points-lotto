@@ -363,8 +363,30 @@ def index():
     
     try:
         # Get qualified users (all with 1+ point) - ALL users
-        users = points_scraper.get_leaderboard(limit=None)
+        print("Fetching leaderboard from PointsMarket...")
+        try:
+            users = points_scraper.get_leaderboard(limit=None)
+            if users is None:
+                print("⚠️  get_leaderboard returned None")
+                users = []
+            elif not isinstance(users, list):
+                print(f"⚠️  get_leaderboard returned non-list: {type(users)}")
+                users = []
+            else:
+                print(f"✅ Fetched {len(users)} users from PointsMarket")
+        except Exception as e:
+            print(f"❌ Error fetching leaderboard: {e}")
+            import traceback
+            traceback.print_exc()
+            users = []
+        
         qualified = [u for u in users if u.get('total_points', 0) >= 1]
+        print(f"Found {len(qualified)} qualified users (1+ points)")
+        
+        if len(qualified) == 0 and len(users) > 0:
+            print(f"⚠️  No qualified users found, but {len(users)} total users fetched")
+            print(f"   Sample user: {users[0] if users else 'N/A'}")
+        
         qualified.sort(key=lambda x: x.get('total_points', 0), reverse=True)
         
         # Add ranks
@@ -420,6 +442,9 @@ def index():
         # Ensure qualified_users is always a list, even if empty
         if not qualified:
             qualified = []
+            print("⚠️  WARNING: No qualified users to display!")
+        
+        print(f"Rendering page with {len(qualified)} qualified users")
         
         return render_template(
             'index.html',
@@ -427,10 +452,22 @@ def index():
             total_qualified=len(qualified),
             next_reset=next_midnight.isoformat(),
             current_winner=current_winner,
-            all_winners=all_winners or []
+            all_winners=all_winners or [],
+            api_error=None if qualified or not users else "Unable to fetch users from PointsMarket. Please try again later."
         )
     except Exception as e:
-        return f"Error: {str(e)}", 500
+        print(f"❌ Error in index route: {e}")
+        import traceback
+        traceback.print_exc()
+        return render_template(
+            'index.html',
+            qualified_users=[],
+            total_qualified=0,
+            next_reset=None,
+            current_winner=None,
+            all_winners=[],
+            api_error=f"Error loading page: {str(e)}"
+        )
 
 
 @app.route('/api/current_winner')
