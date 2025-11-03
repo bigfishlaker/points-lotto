@@ -66,9 +66,8 @@ def init_database_with_winners():
                     'random_seed': None,  # Unknown
                     'selection_hash': None,  # Will be generated
                 }
-                # TODO: Add winner #4 and #5 when their usernames are confirmed
-                # Winner #4: 2025-10-31
-                # Winner #5: 2025-11-01
+                # NOTE: Winners #4 (2025-10-31) and #5 (2025-11-01) were not found in database/logs
+                # System will continue automatically - next winner selected will be sequential point #4+
             ]
             
             for winner in initial_winners:
