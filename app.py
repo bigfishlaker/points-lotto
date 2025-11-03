@@ -5,6 +5,7 @@ import time
 import random
 import hashlib
 import os
+import sqlite3
 from database import DatabaseManager
 
 # PointsMarket integration
@@ -110,6 +111,23 @@ def init_database_with_winners():
                         print(f"  ✅ Selected @{winner['username']} for {date_str} ({winner['points']} pts)")
                     else:
                         print(f"  ⚠️  Failed to select winner for {date_str} - PointsMarket API may be unavailable")
+            
+            # Fix any incorrectly dated winners (winner #4 should be 2025-10-31, not 2025-11-01)
+            all_winners = db.get_all_winners()
+            winners_by_points = {w['points']: w for w in all_winners}
+            if 4 in winners_by_points and 5 in winners_by_points:
+                winner_4 = winners_by_points[4]
+                winner_5 = winners_by_points[5]
+                # If winner #4 has wrong date, fix it
+                if winner_4['drawing_date'] == '2025-11-01' and winner_5['drawing_date'] == '2025-11-01':
+                    print(f"⚠️  Fixing date for winner #4 (@{winner_4['username']}): 2025-11-01 -> 2025-10-31")
+                    conn = sqlite3.connect(db.db_path)
+                    c = conn.cursor()
+                    c.execute('UPDATE daily_winners SET drawing_date = ?, drawing_period = ? WHERE winner_username = ? AND winner_points = 4',
+                              ('2025-10-31', '2025-10-31', winner_4['username']))
+                    conn.commit()
+                    conn.close()
+                    print(f"✅ Fixed date for @{winner_4['username']}")
     except Exception as e:
         print(f"Error initializing database: {e}")
         import traceback
