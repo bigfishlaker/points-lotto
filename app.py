@@ -294,13 +294,17 @@ def index():
             traceback.print_exc()
             all_winners = []
         
+        # Ensure qualified_users is always a list, even if empty
+        if not qualified:
+            qualified = []
+        
         return render_template(
             'index.html',
             qualified_users=qualified,
             total_qualified=len(qualified),
             next_reset=next_midnight.isoformat(),
             current_winner=current_winner,
-            all_winners=all_winners
+            all_winners=all_winners or []
         )
     except Exception as e:
         return f"Error: {str(e)}", 500

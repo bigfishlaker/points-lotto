@@ -174,14 +174,26 @@
                 padding: 8px 16px;
             }
             
-            /* Hide "Powered by" on mobile or make it smaller */
+            /* Header buttons on mobile */
+            .header-content > div:last-child {
+                gap: 8px;
+                right: 12px;
+                flex-wrap: wrap;
+            }
+            
             .header-content > div:last-child a {
                 font-size: 9px;
             }
             
-            .header-content > div:last-child {
-                gap: 8px;
-                right: 12px;
+            .header-content > div:last-child button {
+                padding: 6px 10px;
+                font-size: 11px;
+            }
+            
+            @media (max-width: 480px) {
+                .header-content > div:last-child a {
+                    display: none; /* Hide on very small screens */
+                }
             }
             
             .ascii-art {
@@ -229,15 +241,43 @@
                 touch-action: pan-y pan-x;
                 overflow-x: auto;
                 overflow-y: auto;
+                max-height: 70vh; /* Better mobile height */
+            }
+            
+            table {
+                min-width: 100%;
+                table-layout: auto;
             }
             
             th, td {
                 padding: 10px 12px;
                 font-size: 13px;
+                word-wrap: break-word;
             }
             
             .rank {
                 width: 40px;
+                min-width: 40px;
+            }
+            
+            .username {
+                min-width: 120px;
+            }
+            
+            /* Ensure table doesn't break on small screens */
+            @media (max-width: 480px) {
+                .table-container {
+                    font-size: 12px;
+                }
+                
+                th, td {
+                    padding: 8px 6px;
+                    font-size: 12px;
+                }
+                
+                .username a {
+                    font-size: 12px;
+                }
             }
             
             /* Ensure buttons and inputs are clickable */
@@ -1044,14 +1084,14 @@
             </div>
             <div style="display: flex; align-items: center; gap: 16px; position: absolute; right: 24px;">
                 <a href="https://pointsmarket.io" target="_blank" 
-                   style="color: #888; font-size: 11px; text-decoration: none; transition: color 0.2s;"
+                   style="color: #888; font-size: 11px; text-decoration: none; transition: color 0.2s; white-space: nowrap;"
                    onmouseover="this.style.color='#4CAF50'"
                    onmouseout="this.style.color='#888'">
                     Powered by <strong style="color: #4CAF50;">PointsMarket</strong>
                 </a>
                 <button onclick="viewWinner()" 
                         style="background: #4CAF50; border: none; padding: 6px 14px; 
-                               color: #fff; font-size: 12px; border-radius: 4px; cursor: pointer; font-weight: 600;">
+                               color: #fff; font-size: 12px; border-radius: 4px; cursor: pointer; font-weight: 600; white-space: nowrap;">
                     SEE WINNER!
                 </button>
             </div>
@@ -1106,6 +1146,7 @@
                             </tr>
                         </thead>
                         <tbody id="leaderboardBody">
+                            {% if qualified_users and qualified_users|length > 0 %}
                             {% for user in qualified_users[:100] %}
                             <tr data-username="{{ user.username|lower }}" 
                                 onclick="selectUser('{{ user.username }}')"
@@ -1136,6 +1177,13 @@
                                 </td>
                             </tr>
                             {% endfor %}
+                            {% else %}
+                            <tr>
+                                <td colspan="4" style="text-align: center; padding: 40px; color: #666;">
+                                    No qualified users found. Please check back later.
+                                </td>
+                            </tr>
+                            {% endif %}
                         </tbody>
                     </table>
                     {% if qualified_users|length > 100 %}
