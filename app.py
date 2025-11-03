@@ -66,9 +66,25 @@ def init_database_with_winners():
                     'total_eligible': None,  # Unknown
                     'random_seed': None,  # Unknown
                     'selection_hash': None,  # Will be generated
+                },
+                {
+                    'username': 'alppisik',
+                    'points': 4,  # Fourth winner gets 4 points
+                    'drawing_date': '2025-10-31',
+                    'selected_at': datetime(2025, 10, 31, 0, 5, 0).isoformat(),
+                    'total_eligible': None,  # Unknown
+                    'random_seed': None,  # Unknown
+                    'selection_hash': None,  # Will be generated
+                },
+                {
+                    'username': 'ebechinedu',
+                    'points': 5,  # Fifth winner gets 5 points
+                    'drawing_date': '2025-11-01',
+                    'selected_at': datetime(2025, 11, 1, 0, 5, 0).isoformat(),
+                    'total_eligible': None,  # Unknown
+                    'random_seed': None,  # Unknown
+                    'selection_hash': None,  # Will be generated
                 }
-                # NOTE: Winners #4 (2025-10-31) and #5 (2025-11-01) were not found in database/logs
-                # System will continue automatically - next winner selected will be sequential point #4+
             ]
             
             for winner in initial_winners:
@@ -153,16 +169,24 @@ def select_winner_for_date(drawing_date: str, exclude_usernames: list = None):
             return existing
         
         print(f"Fetching leaderboard for {drawing_date}...")
-        try:
-            users = points_scraper.get_leaderboard(limit=None)
-        except Exception as e:
-            print(f"Error fetching leaderboard: {e}")
-            # If API fails, try again without exclusion
+        users = None
+        max_retries = 3
+        retry_delay = 2  # seconds
+        
+        for attempt in range(max_retries):
             try:
                 users = points_scraper.get_leaderboard(limit=None)
-            except Exception as e2:
-                print(f"Retry also failed: {e2}")
-                return None
+                if users and len(users) > 0:
+                    break  # Success, exit retry loop
+            except Exception as e:
+                error_msg = str(e)
+                print(f"Error fetching leaderboard (attempt {attempt + 1}/{max_retries}): {error_msg[:100]}")
+                if attempt < max_retries - 1:
+                    print(f"Retrying in {retry_delay} seconds...")
+                    time.sleep(retry_delay)
+                else:
+                    print(f"All {max_retries} attempts failed")
+                    return None
         
         if not users:
             print("No users returned from API")
