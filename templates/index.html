@@ -673,6 +673,48 @@
         .rng-terminal-line.result { color: #FFD700; font-weight: 600; }
         .rng-terminal-line.error { color: #f44336; }
         
+        /* Winner celebration animation */
+        .winner-celebration {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin: 20px 0;
+            padding: 20px;
+            animation: celebrate 2s ease-in-out infinite;
+        }
+        
+        .winner-celebration img {
+            width: 150px;
+            height: 150px;
+            border-radius: 50%;
+            border: 4px solid #FFD700;
+            box-shadow: 0 0 20px rgba(255, 215, 0, 0.6),
+                        0 0 40px rgba(255, 215, 0, 0.4),
+                        0 0 60px rgba(255, 215, 0, 0.2);
+            object-fit: cover;
+            animation: spinAndBounce 3s ease-in-out infinite;
+        }
+        
+        @keyframes celebrate {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+        
+        @keyframes spinAndBounce {
+            0%, 100% { 
+                transform: rotate(0deg) translateY(0px);
+            }
+            25% { 
+                transform: rotate(5deg) translateY(-10px);
+            }
+            50% { 
+                transform: rotate(0deg) translateY(0px);
+            }
+            75% { 
+                transform: rotate(-5deg) translateY(-10px);
+            }
+        }
+        
         .rng-terminal-prompt {
             margin-top: 12px;
             padding: 8px;
@@ -1320,6 +1362,12 @@
                 .then(data => {
                     output.innerHTML = '';
                     if (data.success && data.winner) {
+                        // Add celebration image
+                        const celebrationDiv = document.createElement('div');
+                        celebrationDiv.className = 'winner-celebration';
+                        celebrationDiv.innerHTML = '<img src="/static/img/miladet.jpg" alt="Celebration!" style="animation-delay: 0s;">';
+                        output.appendChild(celebrationDiv);
+                        
                         addTerminalLine('$ Today\'s Winner', 'success', 30);
                         addTerminalLine('', 'info', 0);
                         addTerminalLine('🏆 WINNER:', 'result', 40);
@@ -1404,6 +1452,16 @@
                                 setTimeout(() => {
                                     addTerminalLine('');
                                     addTerminalLine('', 'result', 0);
+                                    
+                                    // Add celebration animation
+                                    const celebrationDiv = document.createElement('div');
+                                    celebrationDiv.className = 'winner-celebration';
+                                    celebrationDiv.innerHTML = '<img src="/static/img/miladet.jpg" alt="Celebration!" style="opacity: 0; transition: opacity 0.5s;">';
+                                    output.appendChild(celebrationDiv);
+                                    setTimeout(() => {
+                                        celebrationDiv.querySelector('img').style.opacity = '1';
+                                    }, 100);
+                                    
                                     addTerminalLine('🏆 WINNER SELECTED:', 'result', 50);
                                     setTimeout(() => addTerminalLine(`   Username: @${data.winner.username}`, 'result', 40), 400);
                                     setTimeout(() => addTerminalLine(`   Points: ${data.winner.points}`, 'result', 40), 800);
