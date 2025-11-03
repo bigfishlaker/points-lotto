@@ -1,0 +1,42 @@
+[
+  {
+    "username": "noobysol",
+    "points": 1,
+    "drawing_date": "2025-10-28",
+    "total_eligible": 900,
+    "random_seed": 67890,
+    "selection_hash": "def456ghi789"
+  },
+  {
+    "username": "doomercorp",
+    "points": 2,
+    "drawing_date": "2025-10-29",
+    "total_eligible": 920,
+    "random_seed": 12345,
+    "selection_hash": "abc123def456"
+  },
+  {
+    "username": "ororys",
+    "points": 3,
+    "drawing_date": "2025-10-30",
+    "total_eligible": null,
+    "random_seed": null,
+    "selection_hash": null
+  },
+  {
+    "username": "alppisik",
+    "points": 4,
+    "drawing_date": "2025-10-31",
+    "total_eligible": null,
+    "random_seed": null,
+    "selection_hash": null
+  },
+  {
+    "username": "ebechinedu",
+    "points": 5,
+    "drawing_date": "2025-11-01",
+    "total_eligible": null,
+    "random_seed": null,
+    "selection_hash": null
+  }
+]
