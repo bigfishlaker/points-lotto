@@ -241,6 +241,10 @@ def index():
                 # Fallback to current winner from database if no winners yet
                 current_winner = db.get_current_daily_winner()
             
+            # If no current winner from database, ensure we have one from all_winners
+            if not current_winner and all_winners:
+                current_winner = all_winners[-1]
+            
             print(f"Rendering page with {len(all_winners)} winners")
             if all_winners:
                 print(f"  First winner: @{all_winners[0].get('username', 'unknown')} - {all_winners[0].get('drawing_date', 'N/A')}")
@@ -266,7 +270,21 @@ def index():
 @app.route('/api/current_winner')
 def api_current_winner():
     """Get current winner with RNG details"""
+    # Try to get current winner from database first
     winner = db.get_current_daily_winner()
+    
+    # If no current winner (is_current=1), get the most recent winner
+    if not winner:
+        all_winners = db.get_all_winners()
+        if all_winners:
+            # Sort by date and get most recent
+            def sort_key(w):
+                selected = w.get('selected_at') or ''
+                drawing = w.get('drawing_date') or ''
+                return selected if selected else drawing
+            sorted_winners = sorted(all_winners, key=sort_key)
+            winner = sorted_winners[-1] if sorted_winners else None
+    
     if winner:
         return jsonify({
             'success': True,
