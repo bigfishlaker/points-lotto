@@ -100,12 +100,16 @@ def init_database_with_winners():
                 existing = db.get_winner_for_date(date_str)
                 if not existing:
                     print(f"Selecting retroactive winner for {date_str}...")
-                    winner = select_winner_for_date(date_str, exclude_usernames=existing_usernames[:3])  # Exclude first 3 to get new winners
+                    # Try without exclusion first (more likely to succeed)
+                    winner = select_winner_for_date(date_str, exclude_usernames=None)
+                    if not winner:
+                        # If that fails, try with exclusion
+                        winner = select_winner_for_date(date_str, exclude_usernames=existing_usernames[:3])
                     if winner:
                         existing_usernames.append(winner['username'])  # Update list to avoid duplicates
-                        print(f"  ✅ Selected @{winner['username']} for {date_str}")
+                        print(f"  ✅ Selected @{winner['username']} for {date_str} ({winner['points']} pts)")
                     else:
-                        print(f"  ⚠️  Failed to select winner for {date_str}")
+                        print(f"  ⚠️  Failed to select winner for {date_str} - PointsMarket API may be unavailable")
     except Exception as e:
         print(f"Error initializing database: {e}")
         import traceback
@@ -131,22 +135,33 @@ def select_winner_for_date(drawing_date: str, exclude_usernames: list = None):
             return existing
         
         print(f"Fetching leaderboard for {drawing_date}...")
-        users = points_scraper.get_leaderboard(limit=None)
+        try:
+            users = points_scraper.get_leaderboard(limit=None)
+        except Exception as e:
+            print(f"Error fetching leaderboard: {e}")
+            # If API fails, try again without exclusion
+            try:
+                users = points_scraper.get_leaderboard(limit=None)
+            except Exception as e2:
+                print(f"Retry also failed: {e2}")
+                return None
+        
+        if not users:
+            print("No users returned from API")
+            return None
         
         # Baseline: all users with 1+ point qualify
         qualified = [u for u in users if u.get('total_points', 0) >= 1]
         
-        # Exclude already selected winners if requested
-        if exclude_usernames:
+        # Exclude already selected winners if requested (but only if we have enough users)
+        if exclude_usernames and len(qualified) > len(exclude_usernames):
             qualified = [u for u in qualified if u['username'] not in exclude_usernames]
-            # If no one left, allow duplicates (fallback)
             if not qualified:
-                print("All qualified users already won, allowing duplicates...")
-                users = points_scraper.get_leaderboard(limit=None)
+                print("All excluded users, allowing any qualified user...")
                 qualified = [u for u in users if u.get('total_points', 0) >= 1]
         
         if not qualified:
-            print("No eligible users")
+            print("No eligible users after filtering")
             return None
         
         print(f"{len(qualified)} qualified users")
