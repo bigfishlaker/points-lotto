@@ -111,9 +111,6 @@ def init_database_with_winners():
         import traceback
         traceback.print_exc()
 
-# Initialize database on module import (works for both dev and production)
-init_database_with_winners()
-
 def get_est_now():
     """Get current time in EST/EDT"""
     est = timezone(timedelta(hours=-5))
@@ -199,6 +196,10 @@ def select_winner():
     now_est = get_est_now()
     today_str = now_est.date().isoformat()
     return select_winner_for_date(today_str)
+
+# Initialize database on module import (works for both dev and production)
+# Must be called AFTER select_winner_for_date is defined
+init_database_with_winners()
 
 def daily_scheduler():
     """Scheduler runs at 00:05 EST daily"""
