@@ -89,6 +89,23 @@ def init_database_with_winners():
             print(f"Database now has {len(winners)} winners")
         else:
             print(f"Database already initialized with {len(winners)} winners")
+        
+        # Fill in missing winners for historical dates (if PointsMarket is available)
+        if POINTSMARKET_ENABLED:
+            missing_dates = ['2025-10-31', '2025-11-01']
+            existing_winners = db.get_all_winners()
+            existing_usernames = [w['username'] for w in existing_winners]
+            
+            for date_str in missing_dates:
+                existing = db.get_winner_for_date(date_str)
+                if not existing:
+                    print(f"Selecting retroactive winner for {date_str}...")
+                    winner = select_winner_for_date(date_str, exclude_usernames=existing_usernames[:3])  # Exclude first 3 to get new winners
+                    if winner:
+                        existing_usernames.append(winner['username'])  # Update list to avoid duplicates
+                        print(f"  ✅ Selected @{winner['username']} for {date_str}")
+                    else:
+                        print(f"  ⚠️  Failed to select winner for {date_str}")
     except Exception as e:
         print(f"Error initializing database: {e}")
         import traceback
@@ -105,25 +122,31 @@ def get_est_now():
     is_dst = now_utc.month >= 3 and now_utc.month < 11
     return now_utc.astimezone(edt if is_dst else est)
 
-def select_winner():
-    """Select winner for today - baseline qualification (1+ point)"""
+def select_winner_for_date(drawing_date: str, exclude_usernames: list = None):
+    """Select winner for a specific date - baseline qualification (1+ point)"""
     if not POINTSMARKET_ENABLED:
         return None
     
     try:
-        now_est = get_est_now()
-        today_str = now_est.date().isoformat()
-        
         # Check if winner already exists
-        existing = db.get_winner_for_date(today_str)
+        existing = db.get_winner_for_date(drawing_date)
         if existing:
             return existing
         
-        print(f"Fetching leaderboard for {today_str}...")
+        print(f"Fetching leaderboard for {drawing_date}...")
         users = points_scraper.get_leaderboard(limit=None)
         
         # Baseline: all users with 1+ point qualify
         qualified = [u for u in users if u.get('total_points', 0) >= 1]
+        
+        # Exclude already selected winners if requested
+        if exclude_usernames:
+            qualified = [u for u in qualified if u['username'] not in exclude_usernames]
+            # If no one left, allow duplicates (fallback)
+            if not qualified:
+                print("All qualified users already won, allowing duplicates...")
+                users = points_scraper.get_leaderboard(limit=None)
+                qualified = [u for u in users if u.get('total_points', 0) >= 1]
         
         if not qualified:
             print("No eligible users")
@@ -131,47 +154,51 @@ def select_winner():
         
         print(f"{len(qualified)} qualified users")
         
-        # Select winner
-        seed_string = f"{today_str}{datetime.now().isoformat()}{len(qualified)}"
+        # Select winner using date-specific seed (deterministic for historical dates)
+        seed_string = f"{drawing_date}00:05:00{len(qualified)}"
         random_seed = int(hashlib.sha256(seed_string.encode()).hexdigest()[:8], 16) % 1000000
         random.seed(random_seed)
         winner = random.choice(qualified)
         random.seed()
         
-        # Calculate lottery points: sequential based on TOTAL winner entries count (1, 2, 3, 4, ...)
-        # Each win gets its own unique sequential number, even if same user wins multiple times
-        # Example: User A wins 1st time = 1 point, User B wins = 2 points, User A wins 2nd time = 3 points
+        # Calculate lottery points: sequential based on TOTAL winner entries count
         all_winners = db.get_all_winners()
         lottery_points = len(all_winners) + 1  # Next sequential number
         
         selection_hash = hashlib.sha256(
-            f"{today_str}{winner['username']}{lottery_points}{random_seed}".encode()
+            f"{drawing_date}{winner['username']}{lottery_points}{random_seed}".encode()
         ).hexdigest()[:16]
         
-        # Save winner with lottery points (not their PointsMarket points)
+        # Save winner with lottery points
         success = db.record_daily_winner(
             winner['username'],
-            lottery_points,  # Use sequential lottery points, not PointsMarket points
-            today_str,
+            lottery_points,
+            drawing_date,
             total_eligible=len(qualified),
             random_seed=random_seed,
             selection_hash=selection_hash
         )
         
         if success:
-            print(f"Winner: @{winner['username']} (lottery points: {lottery_points})")
+            print(f"Winner for {drawing_date}: @{winner['username']} (lottery points: {lottery_points})")
             return {
                 'username': winner['username'],
                 'points': lottery_points,
-                'drawing_date': today_str,
+                'drawing_date': drawing_date,
                 'total_eligible': len(qualified),
                 'random_seed': random_seed,
                 'selection_hash': selection_hash
             }
-            return None
-    except Exception as e:
-        print(f"Error selecting winner: {e}")
         return None
+    except Exception as e:
+        print(f"Error selecting winner for {drawing_date}: {e}")
+        return None
+
+def select_winner():
+    """Select winner for today - baseline qualification (1+ point)"""
+    now_est = get_est_now()
+    today_str = now_est.date().isoformat()
+    return select_winner_for_date(today_str)
 
 def daily_scheduler():
     """Scheduler runs at 00:05 EST daily"""
