@@ -1501,25 +1501,164 @@
         });
         {% endif %}
         
-        // Search/filter users
+        // Search/filter users - searches ALL qualified users via API
+        let allUsersCache = null;
+        let searchTimeout = null;
+        
         function filterUsers() {
             const search = document.getElementById('searchInput').value.toLowerCase().trim();
             const rows = document.querySelectorAll('#leaderboardBody tr');
             
+            // Clear existing timeout
+            if (searchTimeout) {
+                clearTimeout(searchTimeout);
+            }
+            
+            // If search is empty, show all loaded users
             if (!search) {
                 rows.forEach(row => row.classList.remove('hidden'));
                 return;
             }
             
-            rows.forEach(row => {
-                const username = row.getAttribute('data-username') || '';
-                if (username.includes(search)) {
-                    row.classList.remove('hidden');
-                } else {
-                    row.classList.add('hidden');
-                }
-            });
+            // Debounce API calls
+            searchTimeout = setTimeout(() => {
+                // First filter visible rows for instant feedback
+                rows.forEach(row => {
+                    const username = row.getAttribute('data-username') || '';
+                    if (username.includes(search)) {
+                        row.classList.remove('hidden');
+                    } else {
+                        row.classList.add('hidden');
+                    }
+                });
+                
+                // Then search all users via API if we have results visible
+                fetch('/api/qualified')
+                    .then(r => r.json())
+                    .then(data => {
+                        if (data.success && data.qualified) {
+                            allUsersCache = data.qualified;
+                            const matches = data.qualified.filter(u => 
+                                u.username.toLowerCase().includes(search)
+                            );
+                            
+                            // If found matches beyond top 100, show them
+                            if (matches.length > 0) {
+                                displaySearchResults(matches, search);
+                            } else {
+                                // No matches found anywhere
+                                showNoResults(search);
+                            }
+                        }
+                    })
+                    .catch(err => {
+                        console.error('Error searching users:', err);
+                        // Fallback to local search only
+                    });
+            }, 300); // 300ms debounce
         }
+        
+        function displaySearchResults(matches, searchTerm) {
+            const tbody = document.getElementById('leaderboardBody');
+            const visibleRows = Array.from(tbody.querySelectorAll('tr'));
+            const visibleUsernames = new Set(
+                visibleRows.map(r => r.getAttribute('data-username'))
+            );
+            
+            // Check if any matches are not already visible
+            const hiddenMatches = matches.filter(m => 
+                !visibleUsernames.has(m.username.toLowerCase())
+            );
+            
+            if (hiddenMatches.length > 0) {
+                // Show message that results include users beyond top 100
+                let messageDiv = document.getElementById('searchResultsMessage');
+                if (!messageDiv) {
+                    messageDiv = document.createElement('div');
+                    messageDiv.id = 'searchResultsMessage';
+                    messageDiv.style.cssText = 'padding: 12px; margin: 10px 0; background: #1a1a1a; border: 1px solid #333; border-radius: 4px; color: #4CAF50; font-size: 13px;';
+                    tbody.parentElement.insertBefore(messageDiv, tbody);
+                }
+                messageDiv.innerHTML = `Found ${matches.length} result${matches.length > 1 ? 's' : ''} for "${searchTerm}"${hiddenMatches.length > 0 ? ` (${hiddenMatches.length} beyond top 100 - click "Check Stats" for details)` : ''}`;
+                
+                // Show first few hidden matches
+                hiddenMatches.slice(0, 5).forEach(user => {
+                    const row = createUserRow(user, user.rank);
+                    tbody.appendChild(row);
+                });
+                
+                if (hiddenMatches.length > 5) {
+                    const moreRow = document.createElement('tr');
+                    moreRow.innerHTML = `<td colspan="4" style="text-align: center; padding: 12px; color: #888; font-size: 12px;">
+                        ... and ${hiddenMatches.length - 5} more. Click "Check Stats" for full details.
+                    </td>`;
+                    tbody.appendChild(moreRow);
+                }
+            }
+        }
+        
+        function showNoResults(searchTerm) {
+            let messageDiv = document.getElementById('searchResultsMessage');
+            if (!messageDiv) {
+                messageDiv = document.createElement('div');
+                messageDiv.id = 'searchResultsMessage';
+                messageDiv.style.cssText = 'padding: 12px; margin: 10px 0; background: #1a1a1a; border: 1px solid #333; border-radius: 4px; color: #f44336; font-size: 13px;';
+                const tbody = document.getElementById('leaderboardBody');
+                tbody.parentElement.insertBefore(messageDiv, tbody);
+            }
+            messageDiv.innerHTML = `No users found matching "${searchTerm}"`;
+        }
+        
+        function createUserRow(user, rank) {
+            const row = document.createElement('tr');
+            row.setAttribute('data-username', user.username.toLowerCase());
+            row.style.cssText = 'cursor: pointer; transition: background 0.2s;';
+            row.onmouseover = () => row.style.background = '#0f0f0f';
+            row.onmouseout = () => row.style.background = 'transparent';
+            row.onclick = () => selectUser(user.username);
+            
+            row.innerHTML = `
+                <td class="rank">${rank || '?'}</td>
+                <td class="username">
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <img src="https://unavatar.io/twitter/${user.username}" 
+                             alt="${user.username}" 
+                             style="width: 32px; height: 32px; border-radius: 50%; border: 2px solid #222; object-fit: cover;"
+                             onerror="this.src='https://abs.twimg.com/sticky/default_profile_images/default_profile_normal.png';">
+                        <a href="https://twitter.com/${user.username}" target="_blank" 
+                           onclick="event.stopPropagation();"
+                           style="color: #4CAF50; text-decoration: none;">
+                            @${user.username}
+                        </a>
+                    </div>
+                </td>
+                <td class="points" style="text-align: right;">${user.total_points || 0}</td>
+                <td style="text-align: center;">
+                    ${user.total_points >= 1 ? '<span style="color: #4CAF50; font-size: 18px; font-weight: bold;" title="Qualified (1+ points)">✓</span>' : '<span style="color: #666;">-</span>'}
+                </td>
+            `;
+            return row;
+        }
+        
+        // Clear search results message when search is cleared
+        document.addEventListener('DOMContentLoaded', () => {
+            const searchInput = document.getElementById('searchInput');
+            if (searchInput) {
+                searchInput.addEventListener('input', () => {
+                    const search = searchInput.value.trim();
+                    if (!search) {
+                        const messageDiv = document.getElementById('searchResultsMessage');
+                        if (messageDiv) {
+                            messageDiv.remove();
+                        }
+                        // Show all rows again
+                        document.querySelectorAll('#leaderboardBody tr').forEach(row => {
+                            row.classList.remove('hidden');
+                        });
+                    }
+                });
+            }
+        });
         
         // Initialize
         // Qualification checker with detailed stats modal
