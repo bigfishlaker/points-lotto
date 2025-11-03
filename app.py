@@ -87,19 +87,26 @@ def init_database_with_winners():
                 }
             ]
             
-            for winner in initial_winners:
-                success = db.record_daily_winner(
-                    winner['username'],
-                    winner['points'],
-                    winner['drawing_date'],
-                    total_eligible=winner['total_eligible'],
-                    random_seed=winner['random_seed'],
-                    selection_hash=winner['selection_hash']
-                )
-                if success:
-                    print(f"  Added initial winner: @{winner['username']}")
-                else:
-                    print(f"  Failed to add: @{winner['username']} (may already exist)")
+            print(f"Adding {len(initial_winners)} initial winners...")
+            for i, winner in enumerate(initial_winners, 1):
+                try:
+                    print(f"  [{i}/{len(initial_winners)}] Attempting to add @{winner['username']} ({winner['points']} pts) for {winner['drawing_date']}...")
+                    success = db.record_daily_winner(
+                        winner['username'],
+                        winner['points'],
+                        winner['drawing_date'],
+                        total_eligible=winner['total_eligible'],
+                        random_seed=winner['random_seed'],
+                        selection_hash=winner['selection_hash']
+                    )
+                    if success:
+                        print(f"  ✅ Added initial winner: @{winner['username']}")
+                    else:
+                        print(f"  ⚠️  Failed to add: @{winner['username']} (may already exist or duplicate)")
+                except Exception as e:
+                    print(f"  ❌ ERROR adding @{winner['username']}: {e}")
+                    import traceback
+                    traceback.print_exc()
             
             # Verify
             winners = db.get_all_winners()
