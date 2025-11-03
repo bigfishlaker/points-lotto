@@ -56,7 +56,19 @@ def init_database_with_winners():
                     'total_eligible': 920,
                     'random_seed': 12345,
                     'selection_hash': 'abc123def456',
+                },
+                {
+                    'username': 'ororys',
+                    'points': 3,  # Third winner gets 3 points
+                    'drawing_date': '2025-10-30',
+                    'selected_at': datetime(2025, 10, 30, 0, 5, 0).isoformat(),
+                    'total_eligible': None,  # Unknown
+                    'random_seed': None,  # Unknown
+                    'selection_hash': None,  # Will be generated
                 }
+                # TODO: Add winner #4 and #5 when their usernames are confirmed
+                # Winner #4: 2025-10-31
+                # Winner #5: 2025-11-01
             ]
             
             for winner in initial_winners:
