@@ -46,6 +46,6 @@ for idx, winner in enumerate(sorted_winners, 1):
 db_conn.commit()
 db_conn.close()
 
-print(f"\n✅ Updated {len(sorted_winners)} winners with sequential points")
+print(f"\nSuccessfully updated {len(sorted_winners)} winners with sequential points")
 print("Next winner will get", len(sorted_winners) + 1, "points")
 
