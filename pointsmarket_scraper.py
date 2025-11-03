@@ -126,48 +126,102 @@ class PointsMarketScraper:
         try:
             # Access the leaderboard API
             url = f"{self.base_url}/api/leaderboard"
+            print(f"  📡 Calling PointsMarket API: {url}")
             # Don't limit API call - fetch all available users
-            response = self.session.get(url, timeout=10)
+            response = self.session.get(url, timeout=15)
+            
+            print(f"  📊 API Response Status: {response.status_code}")
             
             if response.status_code == 200:
-                data = response.json()
-                
-                # Extract leaderboard data from the API response
-                leaderboard_data = data.get('leaderboard', [])
-                
-                users = []
-                # Limit slicing only if limit is specified
-                data_to_process = leaderboard_data if limit is None else leaderboard_data[:limit]
-                
-                for i, user in enumerate(data_to_process):
-                    # Extract relevant user data
-                    community_score = user.get('community_score', {})
-                    # Use the 'points' field which is the actual total points
-                    total_points = user.get('points', 0)
+                try:
+                    data = response.json()
+                    print(f"  📦 Response data keys: {list(data.keys()) if isinstance(data, dict) else 'Not a dict'}")
                     
-                    user_info = {
-                        'username': user.get('username', ''),
-                        'total_points': total_points,
-                        'upvotes': community_score.get('upvotes', 0),
-                        'downvotes': community_score.get('downvotes', 0),
-                        'rank': user.get('rank', i + 1),
-                        'transactions': user.get('transactions', 0),
-                        'badges': [b.get('badge_name', '') for b in user.get('badges', [])]
-                    }
-                    users.append(user_info)
-                
-                return users
+                    # Extract leaderboard data from the API response
+                    # Try multiple possible keys
+                    leaderboard_data = None
+                    if isinstance(data, list):
+                        leaderboard_data = data
+                        print(f"  ✅ Response is a list with {len(leaderboard_data)} items")
+                    elif isinstance(data, dict):
+                        leaderboard_data = data.get('leaderboard') or data.get('users') or data.get('data')
+                        print(f"  ✅ Found leaderboard_data: {type(leaderboard_data)}, length: {len(leaderboard_data) if leaderboard_data else 0}")
+                    else:
+                        print(f"  ⚠️  Unexpected response type: {type(data)}")
+                    
+                    if not leaderboard_data:
+                        print(f"  ⚠️  No leaderboard data found in response. Full response: {str(data)[:500]}")
+                        # Try fallback scraping
+                        return self._fallback_scrape_leaderboard()
+                    
+                    users = []
+                    # Limit slicing only if limit is specified
+                    data_to_process = leaderboard_data if limit is None else leaderboard_data[:limit]
+                    
+                    print(f"  🔄 Processing {len(data_to_process)} users...")
+                    
+                    for i, user in enumerate(data_to_process):
+                        # Extract relevant user data
+                        if not isinstance(user, dict):
+                            print(f"  ⚠️  User {i} is not a dict: {type(user)}")
+                            continue
+                        
+                        community_score = user.get('community_score', {})
+                        # Try multiple field names for points
+                        total_points = user.get('points') or user.get('total_points') or user.get('score', 0)
+                        
+                        username = user.get('username') or user.get('handle') or user.get('name', '')
+                        if not username:
+                            print(f"  ⚠️  User {i} has no username: {user}")
+                            continue
+                        
+                        user_info = {
+                            'username': username,
+                            'total_points': int(total_points) if total_points else 0,
+                            'upvotes': community_score.get('upvotes', 0) if isinstance(community_score, dict) else 0,
+                            'downvotes': community_score.get('downvotes', 0) if isinstance(community_score, dict) else 0,
+                            'rank': user.get('rank', i + 1),
+                            'transactions': user.get('transactions', 0),
+                            'badges': [b.get('badge_name', '') if isinstance(b, dict) else str(b) for b in user.get('badges', [])]
+                        }
+                        users.append(user_info)
+                    
+                    print(f"  ✅ Processed {len(users)} users successfully")
+                    if users:
+                        print(f"  📋 Sample user: {users[0]}")
+                    
+                    return users
+                except json.JSONDecodeError as e:
+                    print(f"  ❌ JSON decode error: {e}")
+                    print(f"  📄 Response text (first 500 chars): {response.text[:500]}")
+                    return self._fallback_scrape_leaderboard()
             
             # Fallback: scrape the leaderboard page
+            print(f"  ⚠️  API returned {response.status_code}, trying fallback scraping...")
+            return self._fallback_scrape_leaderboard()
+                
+        except Exception as e:
+            print(f"  ❌ Error fetching leaderboard: {e}")
+            import traceback
+            traceback.print_exc()
+            return []
+    
+    def _fallback_scrape_leaderboard(self) -> List[Dict]:
+        """Fallback method to scrape leaderboard from HTML"""
+        try:
             url = f"{self.base_url}/leaderboard"
-            response = self.session.get(url, timeout=10)
+            print(f"  🔄 Fallback: Scraping {url}")
+            response = self.session.get(url, timeout=15)
             
             if response.status_code == 200:
                 soup = BeautifulSoup(response.content, BEAUTIFULSOUP_PARSER)
-                return self._parse_leaderboard(soup)
-                
+                users = self._parse_leaderboard(soup)
+                print(f"  ✅ Scraped {len(users)} users from HTML")
+                return users
+            else:
+                print(f"  ❌ Fallback scraping failed with status {response.status_code}")
         except Exception as e:
-            print(f"Error fetching leaderboard: {e}")
+            print(f"  ❌ Fallback scraping error: {e}")
         
         return []
     
