@@ -15,7 +15,16 @@ class PointsMarketScraper:
         self.base_url = "https://www.pointsmarket.io"
         self.session = requests.Session()
         self.session.headers.update({
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept': 'application/json, text/plain, */*',
+            'Accept-Language': 'en-US,en;q=0.9',
+            'Accept-Encoding': 'gzip, deflate, br',
+            'Referer': 'https://www.pointsmarket.io/',
+            'Origin': 'https://www.pointsmarket.io',
+            'Connection': 'keep-alive',
+            'Sec-Fetch-Dest': 'empty',
+            'Sec-Fetch-Mode': 'cors',
+            'Sec-Fetch-Site': 'same-origin'
         })
     
     def get_user_points(self, username: str) -> Optional[Dict]:
@@ -123,14 +132,39 @@ class PointsMarketScraper:
         Returns:
             List of user data dictionaries
         """
-        try:
-            # Access the leaderboard API
-            url = f"{self.base_url}/api/leaderboard"
-            print(f"  📡 Calling PointsMarket API: {url}")
-            # Don't limit API call - fetch all available users
-            response = self.session.get(url, timeout=15)
-            
-            print(f"  📊 API Response Status: {response.status_code}")
+        # Retry logic for rate limiting
+        max_retries = 3
+        retry_delay = 2
+        
+        for attempt in range(max_retries):
+            try:
+                # Access the leaderboard API
+                url = f"{self.base_url}/api/leaderboard"
+                print(f"  📡 Calling PointsMarket API: {url} (attempt {attempt + 1}/{max_retries})")
+                
+                # Don't limit API call - fetch all available users
+                response = self.session.get(url, timeout=15)
+                
+                print(f"  📊 API Response Status: {response.status_code}")
+                
+                # Handle rate limiting
+                if response.status_code == 429:
+                    if attempt < max_retries - 1:
+                        wait_time = retry_delay * (attempt + 1)  # Exponential backoff
+                        print(f"  ⚠️  Rate limited (429), waiting {wait_time}s before retry...")
+                        time.sleep(wait_time)
+                        continue
+                    else:
+                        print(f"  ❌ Rate limited after {max_retries} attempts, trying fallback...")
+                        return self._fallback_scrape_leaderboard()
+                
+                # Handle forbidden errors
+                if response.status_code == 403:
+                    print(f"  ⚠️  Forbidden (403) - may need different approach")
+                    if attempt < max_retries - 1:
+                        time.sleep(retry_delay)
+                        continue
+                    return self._fallback_scrape_leaderboard()
             
             if response.status_code == 200:
                 try:
@@ -196,33 +230,61 @@ class PointsMarketScraper:
                     print(f"  📄 Response text (first 500 chars): {response.text[:500]}")
                     return self._fallback_scrape_leaderboard()
             
-            # Fallback: scrape the leaderboard page
-            print(f"  ⚠️  API returned {response.status_code}, trying fallback scraping...")
-            return self._fallback_scrape_leaderboard()
+                # If we get here, we didn't handle the status code above, break out of retry loop
+                break
                 
-        except Exception as e:
-            print(f"  ❌ Error fetching leaderboard: {e}")
-            import traceback
-            traceback.print_exc()
-            return []
+            except requests.exceptions.RequestException as e:
+                print(f"  ❌ Request error (attempt {attempt + 1}): {e}")
+                if attempt < max_retries - 1:
+                    time.sleep(retry_delay)
+                    continue
+                else:
+                    print(f"  ❌ All attempts failed, trying fallback...")
+                    return self._fallback_scrape_leaderboard()
+            except Exception as e:
+                print(f"  ❌ Unexpected error: {e}")
+                import traceback
+                traceback.print_exc()
+                if attempt < max_retries - 1:
+                    time.sleep(retry_delay)
+                    continue
+                return []
+        
+        # If we get here after retries, try fallback
+        if response.status_code != 200:
+            print(f"  ⚠️  API returned {response.status_code} after retries, trying fallback scraping...")
+            return self._fallback_scrape_leaderboard()
     
     def _fallback_scrape_leaderboard(self) -> List[Dict]:
         """Fallback method to scrape leaderboard from HTML"""
         try:
             url = f"{self.base_url}/leaderboard"
             print(f"  🔄 Fallback: Scraping {url}")
-            response = self.session.get(url, timeout=15)
+            
+            # Try with a fresh session for fallback
+            fallback_session = requests.Session()
+            fallback_session.headers.update({
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                'Accept-Language': 'en-US,en;q=0.9',
+                'Referer': 'https://www.pointsmarket.io/'
+            })
+            
+            response = fallback_session.get(url, timeout=15)
             
             if response.status_code == 200:
                 soup = BeautifulSoup(response.content, BEAUTIFULSOUP_PARSER)
                 users = self._parse_leaderboard(soup)
                 print(f"  ✅ Scraped {len(users)} users from HTML")
                 return users
+            elif response.status_code == 403:
+                print(f"  ❌ Fallback scraping blocked (403) - may need different headers or IP")
             else:
                 print(f"  ❌ Fallback scraping failed with status {response.status_code}")
         except Exception as e:
             print(f"  ❌ Fallback scraping error: {e}")
         
+        print(f"  ⚠️  All methods failed - returning empty list")
         return []
     
     def _parse_leaderboard(self, soup: BeautifulSoup) -> List[Dict]:
