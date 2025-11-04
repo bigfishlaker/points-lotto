@@ -668,24 +668,26 @@ def check_and_select_missing_winners():
         now_est = get_est_now()
         today_str = now_est.date().isoformat()
         
-        # Check if today's winner is missing
-        today_winner = db.get_winner_for_date(today_str)
-        if not today_winner:
-            print(f"⚠️  No winner found for today ({today_str}), attempting selection...")
-            result = select_winner()
-            if result:
-                print(f"✅ Selected today's winner: @{result['username']} ({result['points']} pts)")
-            else:
-                print(f"⚠️  Could not select winner for {today_str} - scheduler will retry")
-        
-        # Check yesterday's winner (in case app was down)
-        yesterday = (now_est - timedelta(days=1)).date().isoformat()
-        yesterday_winner = db.get_winner_for_date(yesterday)
-        if not yesterday_winner:
-            print(f"⚠️  No winner found for yesterday ({yesterday}), attempting selection...")
-            result = select_winner_for_date(yesterday)
-            if result:
-                print(f"✅ Selected yesterday's winner: @{result['username']} ({result['points']} pts)")
+        # Use lock to prevent race condition with scheduler
+        with _winner_selection_lock:
+            # Check if today's winner is missing
+            today_winner = db.get_winner_for_date(today_str)
+            if not today_winner:
+                print(f"⚠️  No winner found for today ({today_str}), attempting selection...")
+                result = select_winner()
+                if result:
+                    print(f"✅ Selected today's winner: @{result['username']} ({result['points']} pts)")
+                else:
+                    print(f"⚠️  Could not select winner for {today_str} - scheduler will retry")
+            
+            # Check yesterday's winner (in case app was down)
+            yesterday = (now_est - timedelta(days=1)).date().isoformat()
+            yesterday_winner = db.get_winner_for_date(yesterday)
+            if not yesterday_winner:
+                print(f"⚠️  No winner found for yesterday ({yesterday}), attempting selection...")
+                result = select_winner_for_date(yesterday)
+                if result:
+                    print(f"✅ Selected yesterday's winner: @{result['username']} ({result['points']} pts)")
         
     except Exception as e:
         print(f"❌ Error checking for missing winners: {e}")
