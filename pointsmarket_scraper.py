@@ -18,7 +18,7 @@ class PointsMarketScraper:
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
             'Accept': 'application/json, text/plain, */*',
             'Accept-Language': 'en-US,en;q=0.9',
-            'Accept-Encoding': 'gzip, deflate, br',
+            # Don't request compression - let requests handle it automatically
             'Referer': 'https://www.pointsmarket.io/',
             'Origin': 'https://www.pointsmarket.io',
             'Connection': 'keep-alive',
@@ -171,8 +171,43 @@ class PointsMarketScraper:
                 # Process successful response
                 if response.status_code == 200:
                     try:
-                        data = response.json()
-                        print(f"  📦 Response data keys: {list(data.keys()) if isinstance(data, dict) else 'Not a dict'}")
+                        # Check Content-Type header
+                        content_type = response.headers.get('Content-Type', '').lower()
+                        print(f"  📋 Content-Type: {content_type}")
+                        
+                        # Try to parse JSON - requests should handle gzip automatically
+                        try:
+                            data = response.json()
+                        except json.JSONDecodeError as json_error:
+                            # If JSON decode fails, check if it's compressed
+                            print(f"  ⚠️  JSON decode failed: {json_error}")
+                            print(f"  📄 Response text preview: {response.text[:200]}")
+                            
+                            # Check if response looks like compressed data
+                            content_encoding = response.headers.get('Content-Encoding', '').lower()
+                            if content_encoding in ('gzip', 'deflate', 'br'):
+                                print(f"  🔄 Content-Encoding: {content_encoding} - requests should handle this automatically")
+                                # Try decompressing manually as fallback
+                                import gzip
+                                try:
+                                    if content_encoding == 'gzip':
+                                        decompressed = gzip.decompress(response.content)
+                                        data = json.loads(decompressed.decode('utf-8'))
+                                        print(f"  ✅ Successfully decompressed gzip response")
+                                    else:
+                                        raise ValueError(f"Unsupported compression: {content_encoding}")
+                                except Exception as decompress_error:
+                                    print(f"  ❌ Failed to decompress: {decompress_error}")
+                                    raise json_error
+                            else:
+                                # Not compressed, but still can't parse - might be HTML error page
+                                raise json_error
+                        
+                        print(f"  📦 Response data type: {type(data)}")
+                        if isinstance(data, dict):
+                            print(f"  📦 Response data keys: {list(data.keys())}")
+                        elif isinstance(data, list):
+                            print(f"  📦 Response is a list with {len(data)} items")
                         
                         # Extract leaderboard data from the API response
                         # Try multiple possible keys
