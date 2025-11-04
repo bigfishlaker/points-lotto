@@ -325,34 +325,106 @@ def select_winner():
 init_database_with_winners()
 
 def daily_scheduler():
-    """Scheduler runs at 00:05 EST daily"""
+    """Scheduler runs at 00:05 EST daily with improved reliability"""
     global _scheduler_running
     print("Scheduler started - will select winner at 00:05 EST daily")
     
     last_processed_date = None
+    last_check_hour = None
     
     while _scheduler_running:
         try:
             now_est = get_est_now()
+            today_str = now_est.date().isoformat()
+            current_hour = now_est.hour
+            current_minute = now_est.minute
             
-            # Check if it's 00:05-00:10 EST window
-            if now_est.hour == 0 and 5 <= now_est.minute <= 10:
-                today_str = now_est.date().isoformat()
-                
-                if last_processed_date != today_str:
-                    with _winner_selection_lock:
-                        existing = db.get_winner_for_date(today_str)
-                        if not existing:
-                            print(f"Selecting winner for {today_str}...")
-                            time.sleep(300)  # Wait 5 min for PointsMarket update
-                            select_winner()
+            # Expanded window: 00:05-00:15 EST (10 minutes instead of 5)
+            # Also check if we're past midnight and haven't processed today yet
+            should_process = False
+            
+            if current_hour == 0 and 5 <= current_minute <= 15:
+                # Within the selection window
+                should_process = True
+            elif current_hour == 0 and current_minute < 5:
+                # Before 00:05, wait until window opens
+                pass
+            elif current_hour == 0 and current_minute > 15:
+                # Past window, but check if we missed it
+                existing = db.get_winner_for_date(today_str)
+                if not existing:
+                    print(f"⚠️  Missed selection window for {today_str}, attempting now...")
+                    should_process = True
+            
+            if should_process and last_processed_date != today_str:
+                with _winner_selection_lock:
+                    existing = db.get_winner_for_date(today_str)
+                    if not existing:
+                        print(f"🎰 Selecting winner for {today_str} at {now_est.strftime('%H:%M:%S')} EST...")
+                        
+                        # Wait 5 minutes for PointsMarket update, but do it BEFORE checking window
+                        # Calculate time until 00:05 if we're before it
+                        if current_hour == 0 and current_minute < 5:
+                            wait_seconds = (5 - current_minute) * 60 - now_est.second
+                            if wait_seconds > 0:
+                                print(f"⏳ Waiting {wait_seconds} seconds until 00:05 EST...")
+                                time.sleep(wait_seconds)
+                        
+                        # Additional wait for PointsMarket to update (reduced from 5 min to 2 min)
+                        print("⏳ Waiting 2 minutes for PointsMarket to update...")
+                        time.sleep(120)
+                        
+                        # Retry logic for winner selection
+                        max_retries = 3
+                        retry_delay = 30  # 30 seconds between retries
+                        winner_selected = False
+                        
+                        for attempt in range(max_retries):
+                            try:
+                                print(f"🔄 Attempt {attempt + 1}/{max_retries} to select winner...")
+                                result = select_winner()
+                                if result:
+                                    print(f"✅ Winner selected successfully: @{result['username']} ({result['points']} pts)")
+                                    winner_selected = True
+                                    break
+                                else:
+                                    print(f"⚠️  Attempt {attempt + 1} failed - no winner returned")
+                                    if attempt < max_retries - 1:
+                                        print(f"⏳ Retrying in {retry_delay} seconds...")
+                                        time.sleep(retry_delay)
+                            except Exception as e:
+                                print(f"❌ Error during winner selection (attempt {attempt + 1}): {e}")
+                                import traceback
+                                traceback.print_exc()
+                                if attempt < max_retries - 1:
+                                    print(f"⏳ Retrying in {retry_delay} seconds...")
+                                    time.sleep(retry_delay)
+                        
+                        if not winner_selected:
+                            print(f"❌ Failed to select winner after {max_retries} attempts for {today_str}")
+                            # Don't mark as processed so we can retry later
+                            continue
+                        
                         last_processed_date = today_str
-            elif now_est.hour > 0:
-                last_processed_date = None
+                    else:
+                        print(f"✅ Winner already exists for {today_str}: @{existing['username']}")
+                        last_processed_date = today_str
             
-            time.sleep(60)
+            # Reset tracking when we move to a new hour (but keep last_processed_date for the day)
+            if last_check_hour is not None and current_hour != last_check_hour:
+                if current_hour > 0 and last_processed_date == today_str:
+                    # New hour after processing, keep tracking
+                    pass
+            
+            last_check_hour = current_hour
+            
+            # Check every 30 seconds for more responsive selection
+            time.sleep(30)
+            
         except Exception as e:
-            print(f"Scheduler error: {e}")
+            print(f"❌ Scheduler error: {e}")
+            import traceback
+            traceback.print_exc()
             time.sleep(60)
             
 @app.route('/')
@@ -585,6 +657,44 @@ def api_select_winner():
         if result:
             return jsonify({'success': True, 'winner': result})
         return jsonify({'success': False, 'error': 'Failed or already exists'}), 400
+
+def check_and_select_missing_winners():
+    """Check for missing winners on startup and select them"""
+    if not POINTSMARKET_ENABLED:
+        return
+    
+    print("🔍 Checking for missing winners on startup...")
+    try:
+        now_est = get_est_now()
+        today_str = now_est.date().isoformat()
+        
+        # Check if today's winner is missing
+        today_winner = db.get_winner_for_date(today_str)
+        if not today_winner:
+            print(f"⚠️  No winner found for today ({today_str}), attempting selection...")
+            result = select_winner()
+            if result:
+                print(f"✅ Selected today's winner: @{result['username']} ({result['points']} pts)")
+            else:
+                print(f"⚠️  Could not select winner for {today_str} - scheduler will retry")
+        
+        # Check yesterday's winner (in case app was down)
+        yesterday = (now_est - timedelta(days=1)).date().isoformat()
+        yesterday_winner = db.get_winner_for_date(yesterday)
+        if not yesterday_winner:
+            print(f"⚠️  No winner found for yesterday ({yesterday}), attempting selection...")
+            result = select_winner_for_date(yesterday)
+            if result:
+                print(f"✅ Selected yesterday's winner: @{result['username']} ({result['points']} pts)")
+        
+    except Exception as e:
+        print(f"❌ Error checking for missing winners: {e}")
+        import traceback
+        traceback.print_exc()
+
+# Check for missing winners on startup
+if POINTSMARKET_ENABLED:
+    check_and_select_missing_winners()
 
 # Start scheduler
 if POINTSMARKET_ENABLED:
