@@ -137,15 +137,15 @@ class PointsMarketScraper:
         retry_delay = 2
         
         for attempt in range(max_retries):
-        try:
-            # Access the leaderboard API - try with pagination parameters
-            url = f"{self.base_url}/api/leaderboard"
-            # Try with limit parameter to get all users
-            params = {'limit': 1000, 'offset': 0}  # Request large limit
-            print(f"  📡 Calling PointsMarket API: {url} (attempt {attempt + 1}/{max_retries})")
-            
-            # Don't limit API call - fetch all available users
-            response = self.session.get(url, params=params, timeout=15)
+            try:
+                # Access the leaderboard API - try with pagination parameters
+                url = f"{self.base_url}/api/leaderboard"
+                # Try with limit parameter to get all users
+                params = {'limit': 1000, 'offset': 0}  # Request large limit
+                print(f"  📡 Calling PointsMarket API: {url} (attempt {attempt + 1}/{max_retries})")
+                
+                # Don't limit API call - fetch all available users
+                response = self.session.get(url, params=params, timeout=15)
                 
                 print(f"  📊 API Response Status: {response.status_code}")
                 
@@ -254,9 +254,8 @@ class PointsMarketScraper:
                 return []
         
         # If we get here after retries, try fallback
-        if response.status_code != 200:
-            print(f"  ⚠️  API returned {response.status_code} after retries, trying fallback scraping...")
-            return self._fallback_scrape_leaderboard()
+        print(f"  ⚠️  All retry attempts failed, trying fallback scraping...")
+        return self._fallback_scrape_leaderboard()
     
     def _fallback_scrape_leaderboard(self) -> List[Dict]:
         """Fallback method to scrape leaderboard from HTML"""
