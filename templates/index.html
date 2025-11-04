@@ -475,6 +475,30 @@
                 height: 60px !important;
             }
             
+            /* Winner celebration image responsive */
+            .winner-celebration {
+                padding: 15px;
+                margin: 15px 0;
+            }
+            
+            .winner-celebration img {
+                width: 100px !important;
+                height: 100px !important;
+                max-width: 100%;
+            }
+            
+            /* Confetti images smaller on mobile */
+            .confetti-piece {
+                width: 30px !important;
+                height: 30px !important;
+            }
+            
+            .confetti-piece img {
+                width: 100%;
+                height: 100%;
+                object-fit: cover;
+            }
+            
             /* Winners leaderboard items - more compact */
             #winnersLeaderboard > div {
                 padding: 8px 0 !important;
@@ -782,6 +806,14 @@
                         0 0 60px rgba(255, 215, 0, 0.2);
             object-fit: cover;
             animation: spinAndBounce 3s ease-in-out infinite;
+            display: block;
+            max-width: 100%;
+            height: auto;
+        }
+        
+        /* Ensure image loads properly */
+        .winner-celebration img[src] {
+            background: #1a1a1a;
         }
         
         @keyframes celebrate {
@@ -1513,6 +1545,15 @@
                 // Create img element inside
                 const img = document.createElement('img');
                 img.src = '/static/img/miladet.jpg';
+                img.loading = 'lazy';
+                img.onerror = function() {
+                    // Fallback to emoji if image fails to load
+                    this.style.display = 'none';
+                    const parent = this.parentElement;
+                    if (parent) {
+                        parent.innerHTML = '<div style="color: #4CAF50; font-size: 32px; display: flex; align-items: center; justify-content: center; width: 100%; height: 100%;">🎉</div>';
+                    }
+                };
                 img.alt = 'Confetti';
                 img.style.width = '100%';
                 img.style.height = '100%';
@@ -1621,7 +1662,7 @@
                         // Add celebration image
                         const celebrationDiv = document.createElement('div');
                         celebrationDiv.className = 'winner-celebration';
-                        celebrationDiv.innerHTML = '<img src="/static/img/miladet.jpg" alt="Celebration!" style="animation-delay: 0s;">';
+                        celebrationDiv.innerHTML = '<img src="/static/img/miladet.jpg" alt="Celebration!" style="animation-delay: 0s;" onerror="this.style.display=\'none\'; this.parentElement.innerHTML=\'<div style=\'color: #4CAF50; font-size: 48px;\'>🎉</div>\';" loading="lazy">';
                         output.appendChild(celebrationDiv);
                         
                         addTerminalLine('$ Today\'s Winner', 'success', 30);
@@ -1712,7 +1753,7 @@
                                     // Add celebration animation
                                     const celebrationDiv = document.createElement('div');
                                     celebrationDiv.className = 'winner-celebration';
-                                    celebrationDiv.innerHTML = '<img src="/static/img/miladet.jpg" alt="Celebration!" style="opacity: 0; transition: opacity 0.5s;">';
+                                    celebrationDiv.innerHTML = '<img src="/static/img/miladet.jpg" alt="Celebration!" style="opacity: 0; transition: opacity 0.5s;" onerror="this.style.display=\'none\'; this.parentElement.innerHTML=\'<div style=\'color: #4CAF50; font-size: 48px;\'>🎉</div>\';" loading="lazy">';
                                     output.appendChild(celebrationDiv);
                                     setTimeout(() => {
                                         celebrationDiv.querySelector('img').style.opacity = '1';
