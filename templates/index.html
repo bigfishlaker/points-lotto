@@ -1089,11 +1089,11 @@
                    onmouseout="this.style.color='#888'">
                     Powered by <strong style="color: #4CAF50;">PointsMarket</strong>
                 </a>
-                <button onclick="viewWinner()" 
-                        style="background: #4CAF50; border: none; padding: 6px 14px; 
+            <button onclick="viewWinner()" 
+                    style="background: #4CAF50; border: none; padding: 6px 14px; 
                                color: #fff; font-size: 12px; border-radius: 4px; cursor: pointer; font-weight: 600; white-space: nowrap;">
-                    SEE WINNER!
-                </button>
+                SEE WINNER!
+            </button>
             </div>
         </div>
     </div>
@@ -1121,7 +1121,15 @@
             <!-- Leaderboard -->
             <div class="leaderboard-card">
                 <div class="card-header">
-                    <div class="card-title">Leaderboard</div>
+                    <div>
+                        <div class="card-title">Leaderboard</div>
+                        <div style="font-size: 11px; color: #888; margin-top: 4px; line-height: 1.4;">
+                            <strong style="color: #fff;">How it works:</strong> You only need <strong style="color: #4CAF50;">1 point</strong> to qualify for the daily lottery. Winners are selected automatically at 00:05 EST each day.
+                        </div>
+                        <div style="font-size: 12px; color: #fff; font-weight: 600; margin-top: 8px;">
+                            🎉 Winners: DM <a href="https://x.com/D_Scramble" target="_blank" style="color: #4CAF50; text-decoration: none;">@D_Scramble</a> to claim your prize!
+                        </div>
+                    </div>
                     <div style="flex: 1; margin-left: 20px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
                         <input type="text" id="searchInput" placeholder="Search username (Enter to check stats)..." 
                                style="background: #0a0a0a; border: 1px solid #222; padding: 8px 12px; 
@@ -1256,6 +1264,14 @@
                         <div class="winner-detail">
                             <div class="winner-detail-label">Date</div>
                             <div class="winner-detail-value">{{ current_winner.drawing_date }}</div>
+                        </div>
+                    </div>
+                    <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #222;">
+                        <div style="font-size: 12px; color: #888; margin-bottom: 12px; line-height: 1.6;">
+                            <strong style="color: #fff;">How it works:</strong> You only need <strong style="color: #4CAF50;">1 point</strong> to qualify for the daily lottery. Winners are selected automatically at 00:05 EST each day.
+                        </div>
+                        <div style="font-size: 13px; color: #fff; font-weight: 600; margin-top: 12px;">
+                            🎉 Winners: DM <a href="https://x.com/D_Scramble" target="_blank" style="color: #4CAF50; text-decoration: none;">@D_Scramble</a> to claim your prize!
                         </div>
                     </div>
                 </div>
@@ -1443,8 +1459,8 @@
             
             // Small delay then open terminal
             setTimeout(() => {
-                showRngTerminal();
-                loadCurrentWinnerDisplay();
+            showRngTerminal();
+            loadCurrentWinnerDisplay();
             }, 300);
         }
         
@@ -1732,14 +1748,14 @@
             // Debounce API calls
             searchTimeout = setTimeout(() => {
                 // First filter visible rows for instant feedback
-                rows.forEach(row => {
-                    const username = row.getAttribute('data-username') || '';
-                    if (username.includes(search)) {
-                        row.classList.remove('hidden');
-                    } else {
-                        row.classList.add('hidden');
-                    }
-                });
+            rows.forEach(row => {
+                const username = row.getAttribute('data-username') || '';
+                if (username.includes(search)) {
+                    row.classList.remove('hidden');
+                } else {
+                    row.classList.add('hidden');
+                }
+            });
                 
                 // Then search all users via API if we have results visible
                 fetch('/api/qualified')
