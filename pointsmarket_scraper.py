@@ -181,26 +181,31 @@ class PointsMarketScraper:
                         except json.JSONDecodeError as json_error:
                             # If JSON decode fails, check if it's compressed
                             print(f"  ⚠️  JSON decode failed: {json_error}")
-                            print(f"  📄 Response text preview: {response.text[:200]}")
                             
-                            # Check if response looks like compressed data
+                            # Check if response.content looks like compressed data
                             content_encoding = response.headers.get('Content-Encoding', '').lower()
-                            if content_encoding in ('gzip', 'deflate', 'br'):
-                                print(f"  🔄 Content-Encoding: {content_encoding} - requests should handle this automatically")
+                            content_preview = response.content[:100] if len(response.content) > 100 else response.content
+                            
+                            # Check if content starts with gzip magic bytes (1f 8b)
+                            is_gzipped = len(response.content) > 2 and response.content[:2] == b'\x1f\x8b'
+                            
+                            if is_gzipped or content_encoding == 'gzip':
+                                print(f"  🔄 Detected gzip compression (magic bytes: {is_gzipped}, header: {content_encoding})")
                                 # Try decompressing manually as fallback
                                 import gzip
                                 try:
-                                    if content_encoding == 'gzip':
-                                        decompressed = gzip.decompress(response.content)
-                                        data = json.loads(decompressed.decode('utf-8'))
-                                        print(f"  ✅ Successfully decompressed gzip response")
-                                    else:
-                                        raise ValueError(f"Unsupported compression: {content_encoding}")
+                                    decompressed = gzip.decompress(response.content)
+                                    data = json.loads(decompressed.decode('utf-8'))
+                                    print(f"  ✅ Successfully decompressed gzip response")
                                 except Exception as decompress_error:
                                     print(f"  ❌ Failed to decompress: {decompress_error}")
+                                    # Try accessing raw content
+                                    print(f"  📄 Raw content preview: {content_preview[:200]}")
                                     raise json_error
                             else:
-                                # Not compressed, but still can't parse - might be HTML error page
+                                # Not compressed, but still can't parse - show what we got
+                                print(f"  📄 Response text preview: {response.text[:200] if hasattr(response, 'text') else 'N/A'}")
+                                print(f"  📄 Response content preview: {content_preview[:200]}")
                                 raise json_error
                         
                         print(f"  📦 Response data type: {type(data)}")
