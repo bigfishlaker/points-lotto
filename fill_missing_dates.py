@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Select winners for missing dates 11/02 and 11/03"""
+"""Select winners for missing dates"""
 import sys
 import time
 import random
@@ -95,8 +95,8 @@ print("\n" + "="*60)
 print("SELECTING WINNERS FOR MISSING DATES")
 print("="*60 + "\n")
 
-# Dates to fill
-dates_to_fill = ['2025-11-02', '2025-11-03']
+# Dates to fill - update this list as needed
+dates_to_fill = ['2025-11-04', '2025-11-05']
 
 results = []
 
