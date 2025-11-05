@@ -21,7 +21,7 @@
     "drawing_date": "2025-10-30",
     "total_eligible": null,
     "random_seed": null,
-    "selection_hash": null
+    "selection_hash": "bc9a540b5ce64d37"
   },
   {
     "username": "alppisik",
@@ -29,7 +29,7 @@
     "drawing_date": "2025-10-31",
     "total_eligible": null,
     "random_seed": null,
-    "selection_hash": null
+    "selection_hash": "63440cbe6dfac42a"
   },
   {
     "username": "ebechinedu",
@@ -37,6 +37,22 @@
     "drawing_date": "2025-11-01",
     "total_eligible": null,
     "random_seed": null,
-    "selection_hash": null
+    "selection_hash": "93ea8555738a83b6"
+  },
+  {
+    "username": "zardahexx",
+    "points": 6,
+    "drawing_date": "2025-11-02",
+    "total_eligible": 966,
+    "random_seed": 30757,
+    "selection_hash": "893bf776507bdf60"
+  },
+  {
+    "username": "notagn19",
+    "points": 7,
+    "drawing_date": "2025-11-03",
+    "total_eligible": 966,
+    "random_seed": 261635,
+    "selection_hash": "8cc2b7a40d27cb37"
   }
 ]
