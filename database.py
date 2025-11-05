@@ -122,6 +122,11 @@ class DatabaseManager:
             cursor.execute('CREATE UNIQUE INDEX IF NOT EXISTS idx_daily_winners_period ON daily_winners(drawing_period)')
         except sqlite3.OperationalError:
             pass
+        # CRITICAL: Add UNIQUE constraint on drawing_date to prevent duplicate winners for same date
+        try:
+            cursor.execute('CREATE UNIQUE INDEX IF NOT EXISTS idx_daily_winners_date ON daily_winners(drawing_date)')
+        except sqlite3.OperationalError:
+            pass
         
         # Set previous winners to not current (only if table has rows)
         try:
@@ -329,7 +334,7 @@ class DatabaseManager:
         } for result in results]
     
     def record_daily_winner(self, username: str, points: int, drawing_date: str = None, total_eligible: int = None, random_seed: int = None, selection_hash: str = None, snapshot_date: str = None, drawing_period: str = None) -> bool:
-        """Record a lottery winner with audit trail - one per 6-hour drawing period"""
+        """Record a lottery winner with audit trail - STRICTLY one winner per 24-hour period (by drawing_date)"""
         from datetime import datetime, date
         import hashlib
         
@@ -344,23 +349,51 @@ class DatabaseManager:
             if drawing_date is None:
                 drawing_date = date.today().isoformat()
             
+            # Normalize drawing_date format (YYYY-MM-DD)
+            try:
+                # Ensure it's a valid date string
+                date.fromisoformat(drawing_date)
+            except ValueError:
+                print(f"ERROR: Invalid drawing_date format: {drawing_date}")
+                conn.close()
+                return False
+            
             # Use an exclusive transaction to prevent race conditions
             conn.execute('BEGIN EXCLUSIVE')
             
-            # Determine a period key; fallback to date-only if not provided
-            period_key = drawing_period or drawing_date
-            
-            # FIRST: Check if winner already exists for this period (within transaction)
-            cursor.execute('SELECT id, winner_username FROM daily_winners WHERE drawing_period = ? OR (drawing_period IS NULL AND drawing_date = ?)', (period_key, drawing_date))
+            # CRITICAL: Check if winner already exists for this EXACT date FIRST
+            # This is the PRIMARY check - only ONE winner per drawing_date (24-hour period)
+            cursor.execute('''
+                SELECT id, winner_username, drawing_date, drawing_period 
+                FROM daily_winners 
+                WHERE drawing_date = ?
+                LIMIT 1
+            ''', (drawing_date,))
             existing = cursor.fetchone()
             
             if existing:
-                # Winner already selected for this period - ensure it's marked as current and don't overwrite
-                cursor.execute('UPDATE daily_winners SET is_current = 1 WHERE drawing_period = ? OR (drawing_period IS NULL AND drawing_date = ?)', (period_key, drawing_date))
+                # Winner already selected for this date - NEVER overwrite or allow duplicate
+                existing_id, existing_username, existing_date, existing_period = existing
+                cursor.execute('UPDATE daily_winners SET is_current = 1 WHERE id = ?', (existing_id,))
                 conn.commit()
                 conn.close()
-                print(f"🛡️ Winner already exists for period {period_key}: @{existing[1]} - preventing duplicate")
+                print(f"BLOCKED: Winner already exists for {drawing_date}: @{existing_username} - preventing duplicate/reselection")
+                print(f"   Existing winner ID: {existing_id}, Date: {existing_date}, Period: {existing_period}")
                 return False
+            
+            # Secondary check: Also check by drawing_period if provided (for backwards compatibility)
+            # But drawing_date is the primary key for uniqueness (one per 24 hours)
+            if drawing_period:
+                cursor.execute('''
+                    SELECT id, winner_username, drawing_date, drawing_period 
+                    FROM daily_winners 
+                    WHERE drawing_period = ? AND drawing_date != ?
+                    LIMIT 1
+                ''', (drawing_period, drawing_date))
+                period_existing = cursor.fetchone()
+                if period_existing:
+                    # Period exists but for different date - that's OK, but log it
+                    print(f"INFO: Period {drawing_period} exists for different date, but proceeding with date-based check")
             
             # Only set previous winners to not current if we're inserting a new one
             cursor.execute('UPDATE daily_winners SET is_current = 0 WHERE 1=1')
@@ -370,7 +403,10 @@ class DatabaseManager:
                 hash_input = f"{drawing_date}{username}{points}{random_seed or 0}"
                 selection_hash = hashlib.sha256(hash_input.encode()).hexdigest()[:16]
             
-            # Insert new winner - UNIQUE index on drawing_period will prevent duplicates
+            # Determine period key (use drawing_date as period if not provided - ensures one per day)
+            period_key = drawing_period or drawing_date
+            
+            # Insert new winner - UNIQUE index on drawing_date will prevent duplicates
             cursor.execute('''
                 INSERT INTO daily_winners (winner_username, winner_points, drawing_date, drawing_period, is_current, total_eligible, random_seed, selection_hash, snapshot_date)
                 VALUES (?, ?, ?, ?, 1, ?, ?, ?, ?)
@@ -378,13 +414,25 @@ class DatabaseManager:
             
             conn.commit()
             conn.close()
-            print(f"✅ Winner recorded successfully: @{username} for period {period_key}")
+            print(f"SUCCESS: Winner recorded successfully: @{username} for date {drawing_date} (period: {period_key})")
             return True
         except sqlite3.IntegrityError as e:
             # UNIQUE constraint violation - winner already exists (race condition caught)
             conn.rollback()
+            # Double-check what winner exists
+            try:
+                check_conn = sqlite3.connect(self.db_path)
+                check_cursor = check_conn.cursor()
+                check_cursor.execute('SELECT winner_username FROM daily_winners WHERE drawing_date = ?', (drawing_date,))
+                existing_winner = check_cursor.fetchone()
+                check_conn.close()
+                if existing_winner:
+                    print(f"BLOCKED: IntegrityError - Winner already exists for {drawing_date}: @{existing_winner[0]} - UNIQUE constraint prevented duplicate")
+                else:
+                    print(f"BLOCKED: IntegrityError - Race condition prevented duplicate for {drawing_date}")
+            except:
+                pass
             conn.close()
-            print(f"🛡️ IntegrityError: Winner already exists for period {period_key} - race condition prevented")
             return False
         except sqlite3.Error as e:
             conn.rollback()

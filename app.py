@@ -152,43 +152,90 @@ def init_database_with_winners():
         else:
             print(f"Database already initialized with {len(winners)} winners")
         
-        # Fill in missing winners for historical dates (if PointsMarket is available)
-        if POINTSMARKET_ENABLED:
-            missing_dates = ['2025-10-31', '2025-11-01']
-            existing_winners = db.get_all_winners()
-            existing_usernames = [w['username'] for w in existing_winners]
-            
-            for date_str in missing_dates:
-                existing = db.get_winner_for_date(date_str)
-                if not existing:
-                    print(f"Selecting retroactive winner for {date_str}...")
-                    # Try without exclusion first (more likely to succeed)
-                    winner = select_winner_for_date(date_str, exclude_usernames=None)
-                    if not winner:
-                        # If that fails, try with exclusion
-                        winner = select_winner_for_date(date_str, exclude_usernames=existing_usernames[:3])
-                    if winner:
-                        existing_usernames.append(winner['username'])  # Update list to avoid duplicates
-                        print(f"  ✅ Selected @{winner['username']} for {date_str} ({winner['points']} pts)")
-                    else:
-                        print(f"  ⚠️  Failed to select winner for {date_str} - PointsMarket API may be unavailable")
-            
-            # Fix any incorrectly dated winners (winner #4 should be 2025-10-31, not 2025-11-01)
-            all_winners = db.get_all_winners()
-            winners_by_points = {w['points']: w for w in all_winners}
-            if 4 in winners_by_points and 5 in winners_by_points:
-                winner_4 = winners_by_points[4]
-                winner_5 = winners_by_points[5]
-                # If winner #4 has wrong date, fix it
-                if winner_4['drawing_date'] == '2025-11-01' and winner_5['drawing_date'] == '2025-11-01':
-                    print(f"⚠️  Fixing date for winner #4 (@{winner_4['username']}): 2025-11-01 -> 2025-10-31")
+        # Restore missing winners from backup file instead of reselecting
+        # This prevents reselection of winners that were already chosen
+        import json
+        import os
+        import hashlib
+        
+        backup_file = 'winners_backup.json'
+        if os.path.exists(backup_file):
+            try:
+                with open(backup_file, 'r') as f:
+                    backup_winners = json.load(f)
+                
+                existing_winners = db.get_all_winners()
+                existing_dates = {w['drawing_date'] for w in existing_winners}
+                
+                # Find missing winners in backup
+                missing_from_backup = []
+                for backup_winner in backup_winners:
+                    date = backup_winner.get('drawing_date')
+                    if date and date not in existing_dates:
+                        missing_from_backup.append(backup_winner)
+                
+                if missing_from_backup:
+                    print(f"🔍 Found {len(missing_from_backup)} missing winners in backup file, restoring...")
                     conn = sqlite3.connect(db.db_path)
-                    c = conn.cursor()
-                    c.execute('UPDATE daily_winners SET drawing_date = ?, drawing_period = ? WHERE winner_username = ? AND winner_points = 4',
-                              ('2025-10-31', '2025-10-31', winner_4['username']))
+                    cursor = conn.cursor()
+                    
+                    for winner in missing_from_backup:
+                        date = winner['drawing_date']
+                        username = winner['username']
+                        points = winner['points']
+                        
+                        # Double-check if it exists
+                        cursor.execute('SELECT id FROM daily_winners WHERE drawing_date = ?', (date,))
+                        if cursor.fetchone():
+                            continue
+                        
+                        # Generate selection_hash if not provided
+                        selection_hash = winner.get('selection_hash')
+                        if not selection_hash:
+                            hash_input = f"{date}{username}{points}{winner.get('random_seed', 0)}"
+                            selection_hash = hashlib.sha256(hash_input.encode()).hexdigest()[:16]
+                        
+                        # Insert missing winner - but NEVER overwrite existing
+                        try:
+                            cursor.execute('''
+                                INSERT INTO daily_winners (winner_username, winner_points, drawing_date, drawing_period, is_current, total_eligible, random_seed, selection_hash)
+                                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                            ''', (
+                                username,
+                                points,
+                                date,
+                                date,
+                                0,  # Will update current winner separately
+                                winner.get('total_eligible'),
+                                winner.get('random_seed'),
+                                selection_hash
+                            ))
+                            print(f"  ✅ Restored from backup: @{username} ({date}, {points} pts)")
+                        except sqlite3.IntegrityError as e:
+                            # UNIQUE constraint violation - winner already exists, don't overwrite
+                            cursor.execute('SELECT winner_username FROM daily_winners WHERE drawing_date = ?', (date,))
+                            existing = cursor.fetchone()
+                            if existing:
+                                print(f"  🛡️ SKIPPED: Winner already exists for {date}: @{existing[0]} - not overwriting")
+                            else:
+                                print(f"  ⚠️  IntegrityError restoring @{username}: {e}")
+                        except sqlite3.Error as e:
+                            print(f"  ⚠️  Failed to restore @{username}: {e}")
+                    
+                    # Set most recent winner as current
+                    cursor.execute('UPDATE daily_winners SET is_current = 0 WHERE 1=1')
+                    cursor.execute('''
+                        UPDATE daily_winners 
+                        SET is_current = 1 
+                        WHERE id = (SELECT id FROM daily_winners ORDER BY COALESCE(selected_at, drawing_date) DESC LIMIT 1)
+                    ''')
                     conn.commit()
                     conn.close()
-                    print(f"✅ Fixed date for @{winner_4['username']}")
+                    print(f"✅ Restored {len(missing_from_backup)} winners from backup")
+            except Exception as e:
+                print(f"⚠️  Failed to restore from backup file: {e}")
+                import traceback
+                traceback.print_exc()
     except Exception as e:
         print(f"Error initializing database: {e}")
         import traceback
@@ -208,10 +255,19 @@ def select_winner_for_date(drawing_date: str, exclude_usernames: list = None):
         return None
     
     try:
-        # Check if winner already exists
+        # CRITICAL: First check if winner already exists for this EXACT date - NEVER reselect
+        # This is the PRIMARY check - only ONE winner per 24-hour period (by drawing_date)
         existing = db.get_winner_for_date(drawing_date)
         if existing:
+            print(f"BLOCKED: Winner already exists for {drawing_date}: @{existing['username']} - skipping selection")
             return existing
+        
+        # Additional safety check: Also check by period (for backwards compatibility)
+        # But drawing_date is the definitive check for one-per-day
+        period_check = db.get_winner_for_period(drawing_date)
+        if period_check and period_check.get('drawing_date') == drawing_date:
+            print(f"BLOCKED: Winner found by period for {drawing_date}: @{period_check['username']} - skipping selection")
+            return period_check
         
         print(f"Fetching leaderboard for {drawing_date}...")
         users = None
@@ -358,8 +414,12 @@ def daily_scheduler():
             
             if should_process and last_processed_date != today_str:
                 with _winner_selection_lock:
+                    # CRITICAL: Double-check winner doesn't exist before selecting
                     existing = db.get_winner_for_date(today_str)
-                    if not existing:
+                    if existing:
+                        print(f"✅ Winner already exists for {today_str}: @{existing['username']} - skipping selection")
+                        last_processed_date = today_str
+                    elif not existing:
                         print(f"🎰 Selecting winner for {today_str} at {now_est.strftime('%H:%M:%S')} EST...")
                         
                         # Wait 5 minutes for PointsMarket update, but do it BEFORE checking window
@@ -659,7 +719,7 @@ def api_select_winner():
         return jsonify({'success': False, 'error': 'Failed or already exists'}), 400
 
 def check_and_select_missing_winners():
-    """Check for missing winners on startup and select them"""
+    """Check for missing winners on startup and select them - but NEVER reselect existing winners"""
     if not POINTSMARKET_ENABLED:
         return
     
@@ -670,9 +730,11 @@ def check_and_select_missing_winners():
         
         # Use lock to prevent race condition with scheduler
         with _winner_selection_lock:
-            # Check if today's winner is missing
+            # CRITICAL: Check if today's winner is missing - NEVER reselect if exists
             today_winner = db.get_winner_for_date(today_str)
-            if not today_winner:
+            if today_winner:
+                print(f"✅ Today's winner already exists: @{today_winner['username']} - skipping selection")
+            elif not today_winner:
                 print(f"⚠️  No winner found for today ({today_str}), attempting selection...")
                 result = select_winner()
                 if result:
@@ -680,10 +742,12 @@ def check_and_select_missing_winners():
                 else:
                     print(f"⚠️  Could not select winner for {today_str} - scheduler will retry")
             
-            # Check yesterday's winner (in case app was down)
+            # Check yesterday's winner (in case app was down) - but NEVER reselect if exists
             yesterday = (now_est - timedelta(days=1)).date().isoformat()
             yesterday_winner = db.get_winner_for_date(yesterday)
-            if not yesterday_winner:
+            if yesterday_winner:
+                print(f"✅ Yesterday's winner already exists: @{yesterday_winner['username']} - skipping selection")
+            elif not yesterday_winner:
                 print(f"⚠️  No winner found for yesterday ({yesterday}), attempting selection...")
                 result = select_winner_for_date(yesterday)
                 if result:
