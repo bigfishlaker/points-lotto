@@ -3,6 +3,7 @@
     "username": "noobysol",
     "points": 1,
     "drawing_date": "2025-10-28",
+    "selected_at": "2025-11-08 05:16:36",
     "total_eligible": 900,
     "random_seed": 67890,
     "selection_hash": "def456ghi789"
@@ -11,6 +12,7 @@
     "username": "doomercorp",
     "points": 2,
     "drawing_date": "2025-10-29",
+    "selected_at": "2025-11-08 05:16:36",
     "total_eligible": 920,
     "random_seed": 12345,
     "selection_hash": "abc123def456"
@@ -19,6 +21,7 @@
     "username": "ororys",
     "points": 3,
     "drawing_date": "2025-10-30",
+    "selected_at": "2025-11-08 05:16:36",
     "total_eligible": null,
     "random_seed": null,
     "selection_hash": "bc9a540b5ce64d37"
@@ -27,6 +30,7 @@
     "username": "alppisik",
     "points": 4,
     "drawing_date": "2025-10-31",
+    "selected_at": "2025-11-08 05:16:36",
     "total_eligible": null,
     "random_seed": null,
     "selection_hash": "63440cbe6dfac42a"
@@ -35,6 +39,7 @@
     "username": "ebechinedu",
     "points": 5,
     "drawing_date": "2025-11-01",
+    "selected_at": "2025-11-08 05:16:36",
     "total_eligible": null,
     "random_seed": null,
     "selection_hash": "93ea8555738a83b6"
@@ -43,6 +48,7 @@
     "username": "zardahexx",
     "points": 6,
     "drawing_date": "2025-11-02",
+    "selected_at": "2025-11-08 05:16:36",
     "total_eligible": 966,
     "random_seed": 30757,
     "selection_hash": "893bf776507bdf60"
@@ -51,6 +57,7 @@
     "username": "notagn19",
     "points": 7,
     "drawing_date": "2025-11-03",
+    "selected_at": "2025-11-08 05:16:36",
     "total_eligible": 966,
     "random_seed": 261635,
     "selection_hash": "8cc2b7a40d27cb37"
@@ -59,6 +66,7 @@
     "username": "precidobos",
     "points": 8,
     "drawing_date": "2025-11-04",
+    "selected_at": "2025-11-08 05:16:36",
     "total_eligible": 966,
     "random_seed": 982170,
     "selection_hash": "53a7b0216e50f379"
@@ -67,8 +75,27 @@
     "username": "wasimxweb3",
     "points": 9,
     "drawing_date": "2025-11-05",
+    "selected_at": "2025-11-08 05:16:36",
     "total_eligible": 966,
     "random_seed": 970205,
     "selection_hash": "cd6ab35f86a13084"
+  },
+  {
+    "username": "c0nstant1ne01",
+    "points": 11,
+    "drawing_date": "2025-11-07",
+    "selected_at": "2025-11-08 05:16:37",
+    "total_eligible": 998,
+    "random_seed": 620497,
+    "selection_hash": "ddfa9e9cc7318ab7"
+  },
+  {
+    "username": "tuboofficial",
+    "points": 10,
+    "drawing_date": "2025-11-08",
+    "selected_at": "2025-11-08 05:16:37",
+    "total_eligible": 998,
+    "random_seed": 532555,
+    "selection_hash": "271f0c62a3c6e986"
   }
 ]
