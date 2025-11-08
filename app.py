@@ -546,9 +546,9 @@ def index():
             # Sort by selected_at if available, otherwise drawing_date (chronological order)
             if all_winners:
                 def sort_key(w):
-                    selected = w.get('selected_at') or ''
                     drawing = w.get('drawing_date') or ''
-                    return selected if selected else drawing
+                    selected = w.get('selected_at') or ''
+                    return (drawing, selected)
                 all_winners = sorted(all_winners, key=sort_key)
             
             # Get most recent winner for current winner display (last in sorted list = most recent)
